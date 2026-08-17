@@ -1,6 +1,7 @@
 package metier;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 /*
     * La classe MouvementEpargne représente un mouvement d'épargne dans le système.
     * Chaque mouvement d'épargne a un montant, un sens (contribution ou retrait), et une date.
@@ -8,6 +9,8 @@ import java.time.LocalDate;
 */
 
 public class MouvementEpargne {
+    private static final DateTimeFormatter FORMAT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
     private double montant;
     private SensMouvement sens;
     private LocalDate date;
@@ -57,9 +60,8 @@ public class MouvementEpargne {
 
     @Override
     public String toString() {
-        return "MouvementEpargne " +
-                "montant = " + montant +
-                ", sens = " + sens +
-                ", date = " + date;
+        String signe = (sens == SensMouvement.CONTRIBUTION) ? "+" : "-";
+        String libelle = (sens == SensMouvement.CONTRIBUTION) ? "contribution" : "retrait";
+        return "[" + date.format(FORMAT_DATE) + "] " + signe + montant + " FCFA (" + libelle + ")";
     }
 }

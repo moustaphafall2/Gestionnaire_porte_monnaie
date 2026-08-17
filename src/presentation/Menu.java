@@ -10,6 +10,7 @@ import java.util.Scanner;
 import metier.Categorie;
 import metier.Epargne;
 import metier.ErreurSauvegardeException;
+import metier.MouvementEpargne;
 import metier.Portefeuille;
 import metier.Transaction;
 import metier.TypeTransaction;
@@ -270,7 +271,15 @@ public class Menu {
                     portefeuille.retirerObjectif(id, montant, date);
                     System.out.println("Retrait enregistré.");
                 }
-                case 4 -> afficherObjectifs();
+                case 4 -> {
+                    afficherObjectifs();
+                    if (!portefeuille.getObjectifs().isEmpty()) {
+                        int id = lireEntier("Identifiant de l'objectif à détailler (0 pour revenir) : ");
+                        if (id != 0) {
+                            afficherMouvements(portefeuille.getObjectif(id));
+                        }
+                    }
+                }
                 case 5 -> {
                     afficherObjectifs();
                     int id = lireEntier("Identifiant de l'objectif à supprimer : ");
@@ -296,6 +305,20 @@ public class Menu {
         }
         for (Epargne objectif : objectifs) {
             System.out.println(objectif.getId() + " - " + objectif);
+        }
+    }
+
+    // Détail des contributions/retraits d'un objectif. Ces mouvements ne sont jamais mélangés
+    // à l'historique des transactions (menu 4) : ce n'est ni une dépense ni un revenu.
+    private void afficherMouvements(Epargne objectif) {
+        List<MouvementEpargne> mouvements = objectif.getMouvements();
+        if (mouvements.isEmpty()) {
+            System.out.println("Aucun mouvement pour le moment sur \"" + objectif.getNom() + "\".");
+            return;
+        }
+        System.out.println("Mouvements de \"" + objectif.getNom() + "\" :");
+        for (MouvementEpargne mouvement : mouvements) {
+            System.out.println("  " + mouvement);
         }
     }
 
