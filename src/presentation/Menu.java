@@ -72,7 +72,7 @@ public class Menu {
 
     public void afficherMenuPrincipal() {
         System.out.println();
-        System.out.println("=== GESTION DE PORTE-MONNAIE ===");
+        System.out.println("==== GESTION DE PORTE-MONNAIE ====");
         System.out.println("1. Voir le solde");
         System.out.println("2. Ajouter une dépense");
         System.out.println("3. Ajouter un revenu");
