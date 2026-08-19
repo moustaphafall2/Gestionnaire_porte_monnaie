@@ -1,28 +1,29 @@
 package presentation;
 
+import controleur.ControleurPrincipal;
 import modele.entite.Portefeuille;
-import modele.service.ServiceCategorie;
-import modele.service.ServiceEpargne;
 import modele.service.ServicePortefeuille;
-import modele.service.ServiceStatistique;
-import modele.service.ServiceTransaction;
 import persistance.GestionnaireFichier;
+import vue.VuePrincipale;
 
 /*
     * Point d'entrée du programme. Son unique rôle est d'initialiser les objets nécessaires
-    * (GestionnaireFichier, Portefeuille, les services, Menu) et de démarrer la boucle
-    * principale. C'est ici, et seulement ici, que les dépendances entre services sont reliées.
+    * (GestionnaireFichier, Portefeuille, les services, les vues, les contrôleurs) et de
+    * démarrer la boucle principale. C'est ici, et seulement ici, que les dépendances entre
+    * services et contrôleurs sont reliées.
+    *
+    * Migration en cours vers l'architecture vue/contrôleur : seul ControleurPrincipal existe
+    * pour l'instant (menu principal, écran "voir le solde"). Les services et contrôleurs des
+    * cinq autres écrans seront reliés ici au fur et à mesure de leur migration.
 */
 public class Main {
     public static void main(String[] args) {
         GestionnaireFichier gestionnaireFichier = new GestionnaireFichier("portefeuille.json");
         Portefeuille portefeuille = gestionnaireFichier.charger();
         ServicePortefeuille servicePortefeuille = new ServicePortefeuille(portefeuille, gestionnaireFichier);
-        ServiceEpargne serviceEpargne = new ServiceEpargne(servicePortefeuille);
-        ServiceCategorie serviceCategorie = new ServiceCategorie(servicePortefeuille);
-        ServiceTransaction serviceTransaction = new ServiceTransaction(servicePortefeuille, serviceCategorie);
-        ServiceStatistique serviceStatistique = new ServiceStatistique(servicePortefeuille);
-        Menu menu = new Menu(portefeuille, servicePortefeuille, serviceEpargne, serviceTransaction, serviceCategorie, serviceStatistique);
-        menu.lancer();
+
+        VuePrincipale vuePrincipale = new VuePrincipale();
+        ControleurPrincipal controleurPrincipal = new ControleurPrincipal(vuePrincipale, servicePortefeuille);
+        controleurPrincipal.lancer();
     }
 }

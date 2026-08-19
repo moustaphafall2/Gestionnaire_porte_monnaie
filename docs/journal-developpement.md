@@ -459,3 +459,205 @@ La séparation de `Menu` en vues (`vue/`) et contrôleurs (`controleur/`) — `M
 directement `Portefeuille` (pour `getCategoriesActives`, `getObjectif`, `getObjectifs`,
 `activerCategorie`, `desactiverCategorie`), ce qui n'est plus permis une fois cette séparation
 faite.
+
+## 2026-08-19 — Début de la séparation vue/contrôleur : `VueConsole` et `ControleurPrincipal`
+
+### Ce qui a été écrit
+
+- **`VueConsole`** (nouvelle classe, paquet `vue`) : les briques de saisie/affichage
+  réutilisées par tous les écrans à venir — `lireLigne`, `lireEntier`, `lireMontant`,
+  `lireDate`, `confirmer`, `afficherMessage`, `afficherErreur`. Reprises quasi telles quelles
+  depuis les méthodes privées équivalentes de `Menu` (`demanderMontant`, `demanderDate`,
+  `demanderConfirmation`, `lireEntier`), avec un seul changement réel : chaque méthode passe
+  désormais par `afficherMessage`/`System.out.println` plutôt que par un `System.out.print`
+  local, pour que toute sortie console ait un point de passage unique dans la classe.
+- **`ControleurPrincipal`** (nouvelle classe, paquet `controleur`) : reprend la boucle
+  `lancer()` de `Menu` et l'aiguillage du menu principal. Pour l'instant, seule l'option
+  "Voir le solde" est câblée (elle n'a besoin que de `ServicePortefeuille`, déjà disponible).
+  Les options 2 à 7 affichent "Fonctionnalité en cours de migration, pas encore disponible." —
+  un message clair, pas une erreur ni un plantage — en attendant que chaque écran soit migré à
+  son tour.
+- **`Main`** : bascule sur `ControleurPrincipal`/`VueConsole` à la place de `Menu`. Ne construit
+  plus que `GestionnaireFichier`, `Portefeuille` et `ServicePortefeuille` : les autres services
+  (`ServiceEpargne`, `ServiceCategorie`, `ServiceTransaction`, `ServiceStatistique`) seront
+  reconstruits ici au fur et à mesure que leurs contrôleurs respectifs seront écrits.
+- **`Menu`** : non modifiée, mais plus référencée nulle part. Elle reste dans le dépôt comme
+  source pour extraire les cinq écrans restants (transactions, épargne, catégories,
+  statistiques, et l'affichage détaillé du menu principal), et sera supprimée à l'étape de
+  nettoyage, une fois tous les écrans migrés — pas avant.
+
+### Choix de conception
+
+**Pourquoi couper `Main` sur `ControleurPrincipal` dès maintenant, plutôt que de garder `Menu`
+actif jusqu'à la fin de la migration ?** Décidé explicitement avant d'écrire le code : la
+bascule immédiate permet de tester chaque écran migré directement dans l'application réelle
+(`java Main`), pas seulement par un harnais de test à part. Le prix à payer est une régression
+temporaire assumée : les écrans 2 à 7 sont indisponibles jusqu'à ce qu'ils soient migrés un par
+un dans les prochaines étapes. C'est le même type d'état transitoire que celui déjà traversé
+pendant la migration des services (le trou de sauvegarde temporaire documenté plus haut dans ce
+journal) : accepté et documenté plutôt que masqué.
+
+**Pourquoi la mise en forme du solde (`%.2f FCFA`) reste dans `ControleurPrincipal` pour
+l'instant, plutôt que dans une vue dédiée ?** Il n'existe pas encore de `VuePrincipale` : cette
+étape ne construit que `VueConsole` (les briques génériques) et `ControleurPrincipal`. La
+formule d'affichage du solde est donc assemblée dans le contrôleur avec `String.format`, puis
+transmise déjà construite à `vueConsole.afficherMessage(String)`. Ce n'est pas une règle
+métier (aucun calcul, aucune décision), donc ça ne viole pas la règle "un contrôleur ne contient
+aucune règle métier" — mais ce n'est pas non plus l'endroit définitif : cet affichage migrera
+vers `VuePrincipale` dès qu'elle existera, pour que la présentation (le format d'un montant)
+reste uniquement du ressort des vues.
+
+**Pourquoi le menu principal est-il affiché ligne par ligne par `ControleurPrincipal` plutôt
+que par une vue ?** Même raison : `VuePrincipale` n'existe pas encore. `afficherMenu()` reste
+temporairement dans le contrôleur, qui délègue chaque ligne à `vueConsole.afficherMessage(...)`
+(donc aucun `System.out.println` direct dans le contrôleur, la règle est respectée). Cette
+méthode migrera vers `VuePrincipale` à l'étape suivante.
+
+### Points à savoir défendre
+
+- **`ControleurPrincipal` contient-il un `System.out.println` ou une règle métier ?** Non : tout
+  affichage passe par `vueConsole.afficherMessage(...)`, et `gererVoirSolde()` ne fait que lire
+  deux valeurs déjà calculées par `ServicePortefeuille` et les transmettre. Aucun calcul, aucune
+  décision métier n'a lieu dans le contrôleur.
+- **`VueConsole` importe-t-elle `modele.service` ?** Non, uniquement `java.time` et
+  `java.util.Scanner` : elle ne fait qu'entrées/sorties, jamais d'appel à un service.
+- **Pourquoi `Menu.java` n'est-elle pas supprimée tout de suite, si elle n'est plus utilisée ?**
+  Elle sert encore de référence directe pour extraire la logique des cinq écrans restants (le
+  code n'a pas besoin d'être réinventé, seulement redistribué entre vue et contrôleur). La
+  supprimer maintenant obligerait à retrouver cette logique dans l'historique Git à chaque
+  écran. Elle disparaîtra à la toute dernière étape, une fois qu'elle sera vraiment sans usage.
+
+### Pièges rencontrés
+
+Aucun.
+
+### Reste à faire
+
+`VuePrincipale` (affichage du menu principal et de l'écran solde, à extraire du contrôleur) ;
+`VueTransaction`/`ControleurTransaction`, `VueEpargne`/`ControleurEpargne`,
+`VueCategorie`/`ControleurCategorie`, `VueStatistique`/`ControleurStatistique`, chacun câblé un
+par un dans `ControleurPrincipal` et `Main` ; puis suppression de `Menu.java`.
+
+## 2026-08-19 — Correction : `VuePrincipale` sort tout l'affichage de `ControleurPrincipal`
+
+### Ce qui a été écrit
+
+- **`VuePrincipale`** (nouvelle classe, `vue`, hérite de `VueConsole`) : trois méthodes —
+  `afficherMenuPrincipal()`, `afficherSolde(double soldeDisponible, double totalEpargne)`,
+  `afficherFonctionnaliteIndisponible()`. Elles contiennent exactement le texte et la mise en
+  forme (`String.format("%.2f FCFA", ...)`) qui vivaient jusque-là dans `ControleurPrincipal`.
+- **`ControleurPrincipal`** : `afficherMenu()` a disparu, remplacée par un appel à
+  `vuePrincipale.afficherMenuPrincipal()`. `gererVoirSolde()` ne fait plus de `String.format` :
+  elle lit `soldeDisponible` et `totalEpargne` auprès de `ServicePortefeuille`, et les transmet
+  telles quelles à `vuePrincipale.afficherSolde(...)`. Le contrôleur ne construit plus aucun
+  texte d'écran ; il ne fait plus que lire des valeurs et les transmettre.
+- **`Main`** : construit et relie `VuePrincipale` à la place de `VueConsole` (héritage oblige,
+  `VuePrincipale` reste utilisable partout où `VueConsole` l'était, avec les trois méthodes en
+  plus).
+
+### Choix de conception
+
+**Pourquoi corriger tout de suite, plutôt que continuer et corriger plus tard sur les six
+écrans ?** Remarque explicite reçue avant de commiter : la limite entre "un contrôleur peut
+transmettre un message via `afficherMessage`" et "un contrôleur construit lui-même l'affichage"
+n'était pas assez nette dans la première version — `afficherMenu()` et le `String.format` du
+solde en étaient la preuve concrète. Corriger dès le premier écran fixe le patron à suivre pour
+`ControleurTransaction`, `ControleurEpargne`, `ControleurCategorie` et `ControleurStatistique` :
+chaque contrôleur appelle un service, récupère des valeurs déjà calculées, les passe telles
+quelles à une méthode de vue nommée pour l'écran concerné (`afficherSolde`, et bientôt
+`afficherHistorique`, `afficherObjectifs`...). Recorriger a posteriori sur six écrans aurait
+coûté six fois plus cher que de fixer la règle maintenant.
+
+**Où tracer la limite, concrètement ?** Un contrôleur peut toujours appeler
+`vuePrincipale.afficherMessage("...")` avec un texte de contrôle de flux générique et non
+formaté (`"Choix invalide, veuillez recommencer."`, `"Au revoir !"`) : ce n'est pas de la mise
+en forme de données métier, juste un texte fixe transmis à une méthode déjà générique de
+`VueConsole`. Ce qui doit obligatoirement passer par une méthode de vue dédiée, c'est tout ce
+qui dépend de données (`String.format` sur un montant, une date, une liste à parcourir) ou tout
+bloc d'affichage structuré propre à un écran (le menu à neuf lignes). C'est la distinction
+appliquée ici : `afficherMenuPrincipal()` et `afficherSolde(...)` existent parce qu'ils
+répondaient à ce critère, pas les deux messages de contrôle de flux qui restent des appels
+directs à `afficherMessage`.
+
+### Points à savoir défendre
+
+- **`ControleurPrincipal` contient-il encore un `System.out.println` ou une mise en forme
+  d'écran ?** Non : `afficherMenu()` et le `String.format` du solde ont disparu, remplacés par
+  des appels à `vuePrincipale.afficherMenuPrincipal()` et `vuePrincipale.afficherSolde(...)`.
+  Les deux seuls textes qui restent dans le contrôleur (`"Choix invalide..."`, `"Au revoir !"`)
+  sont des littéraux fixes, sans donnée à mettre en forme, transmis à une méthode déjà générique
+  héritée de `VueConsole`.
+- **Pourquoi `VuePrincipale` hérite-t-elle de `VueConsole` plutôt que de la détenir en
+  attribut ?** C'est exactement le schéma annoncé au départ ("VuePrincipale... qui en
+  héritent") : hériter donne accès direct à `afficherMessage`, `lireEntier` etc. sans avoir à
+  écrire de méthodes de délégation une par une pour chacune.
+
+### Pièges rencontrés
+
+Aucun — la correction a été appliquée avant tout commit, sur la seule classe concernée.
+
+### Reste à faire
+
+Inchangé : `VueTransaction`/`ControleurTransaction`, `VueEpargne`/`ControleurEpargne`,
+`VueCategorie`/`ControleurCategorie`, `VueStatistique`/`ControleurStatistique`, chacun câblé un
+par un ; puis suppression de `Menu.java`.
+
+## 2026-08-19 — Règle définitive : aucune chaîne destinée à l'utilisateur dans un contrôleur
+
+### Ce qui a été écrit
+
+- **`VuePrincipale`** : deux méthodes de plus, `afficherChoixInvalide()` et
+  `afficherAuRevoir()`, qui remplacent les deux derniers littéraux qui restaient dans
+  `ControleurPrincipal` (`"Choix invalide, veuillez recommencer."` et `"Au revoir !"`).
+  `afficherEchecSauvegarde(String messageErreur)` ajoutée avec elles : les deux lignes
+  affichées quand `ErreurSauvegardeException` est attrapée étaient elles aussi des littéraux
+  dans le contrôleur, alors que la règle du jour ne prévoit aucune exception.
+- **`ControleurPrincipal`** : `default -> vuePrincipale.afficherMessage("Choix invalide...")`
+  devient `default -> vuePrincipale.afficherChoixInvalide()`. Le bloc `catch` et la ligne finale
+  de `lancer()` appellent désormais `vuePrincipale.afficherEchecSauvegarde(erreur.getMessage())`
+  et `vuePrincipale.afficherAuRevoir()`. Il ne reste plus aucune chaîne de caractères destinée à
+  l'utilisateur dans la classe — seulement des appels à des méthodes de vue nommées pour ce
+  qu'elles affichent.
+
+### Choix de conception
+
+**Règle retenue, à appliquer sans exception sur les six écrans restants (`ControleurTransaction`,
+`ControleurEpargne`, `ControleurCategorie`, `ControleurStatistique`, et tout contrôleur à
+venir) : un contrôleur n'écrit jamais de texte destiné à l'utilisateur, même un littéral fixe
+sans donnée à mettre en forme, même passé à une méthode déjà générique comme
+`afficherMessage(String)`.** Chaque message — y compris "Choix invalide", "Au revoir !", ou un
+message d'erreur de sauvegarde — passe par une méthode de vue nommée pour ce qu'elle affiche
+(`afficherChoixInvalide()`, `afficherAuRevoir()`, `afficherEchecSauvegarde(String)`...). Cette
+entrée annule la distinction "littéral de contrôle de flux vs. donnée mise en forme" adoptée
+dans l'entrée précédente : elle s'est révélée trop fine à appliquer de façon fiable sur six
+écrans, et une règle sans exception est plus simple à vérifier qu'une règle à cas particuliers.
+
+**Pourquoi `afficherEchecSauvegarde(String messageErreur)` a été ajoutée sans qu'elle ait été
+demandée explicitement.** La demande ne citait que "Choix invalide" et "Au revoir !", mais la
+règle énoncée dans le même message ("aucune chaîne destinée à l'utilisateur dans un contrôleur,
+sans exception") s'appliquait tout aussi bien aux deux lignes du bloc `catch`, qui étaient
+restées des littéraux après la correction précédente. Les laisser en l'état aurait rouvert
+immédiatement la règle qu'on venait de poser dans le même fichier — autant les traiter
+maintenant plutôt que d'attendre une troisième correction sur cette classe.
+
+### Points à savoir défendre
+
+- **Pourquoi ne pas avoir gardé la distinction "texte fixe / texte avec donnée" de l'entrée
+  précédente ?** Parce qu'elle demande un jugement à chaque nouvelle ligne de code ("ce
+  littéral a-t-il vraiment besoin de sa propre méthode ?"), un jugement qui peut varier d'un
+  écran à l'autre. Une règle absolue ("toujours une méthode de vue, jamais de littéral") ne
+  laisse pas de zone grise : elle se vérifie d'un coup d'œil sur n'importe quel contrôleur.
+- **Est-ce que ça alourdit `VuePrincipale` de méthodes très courtes (une ligne chacune) ?** Oui,
+  et c'est assumé : chaque méthode reste facile à lire et à nommer, et le gain (aucune ambiguïté
+  sur ce qui doit être une méthode de vue) compte plus que le nombre de méthodes.
+
+### Pièges rencontrés
+
+Aucun.
+
+### Reste à faire
+
+Inchangé : `VueTransaction`/`ControleurTransaction`, `VueEpargne`/`ControleurEpargne`,
+`VueCategorie`/`ControleurCategorie`, `VueStatistique`/`ControleurStatistique`, chacun câblé un
+par un, en appliquant dès l'écriture la règle "aucune chaîne dans le contrôleur" ; puis
+suppression de `Menu.java`.
