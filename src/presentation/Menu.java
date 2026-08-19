@@ -245,7 +245,7 @@ public class Menu {
                         System.out.println("Opération annulée.");
                         return;
                     }
-                    portefeuille.creerObjectif(nom, montantCible, dateLimite);
+                    serviceEpargne.creerObjectif(nom, montantCible, dateLimite);
                     System.out.println("Objectif créé.");
                 }
                 case 2 -> {
@@ -254,7 +254,7 @@ public class Menu {
                     Epargne objectif = portefeuille.getObjectif(id);
                     double montant = demanderMontant("Montant à ajouter : ");
                     System.out.printf("Solde disponible actuel : %.2f FCFA%n", servicePortefeuille.getSoldeDisponible());
-                    if (objectif.depasseraCible(montant)) {
+                    if (serviceEpargne.depasseraCible(objectif, montant)) {
                         System.out.println("Attention : cette contribution dépassera le montant cible de l'objectif.");
                     }
                     LocalDate date = demanderDate("Date (JJ/MM/AAAA, vide = aujourd'hui) : ");
@@ -277,7 +277,7 @@ public class Menu {
                         System.out.println("Opération annulée.");
                         return;
                     }
-                    portefeuille.retirerObjectif(id, montant, date);
+                    serviceEpargne.retirerObjectif(id, montant, date);
                     System.out.println("Retrait enregistré.");
                 }
                 case 4 -> {
@@ -293,7 +293,7 @@ public class Menu {
                     afficherObjectifs();
                     int id = lireEntier("Identifiant de l'objectif à supprimer : ");
                     if (demanderConfirmation("Confirmer la suppression de cet objectif ?")) {
-                        portefeuille.supprimerObjectif(id);
+                        serviceEpargne.supprimerObjectif(id);
                         System.out.println("Objectif supprimé.");
                     } else {
                         System.out.println("Opération annulée.");
@@ -313,7 +313,9 @@ public class Menu {
             return;
         }
         for (Epargne objectif : objectifs) {
-            System.out.println(objectif.getId() + " - " + objectif);
+            System.out.printf("%d - %s : %.2f / %.2f FCFA (%.2f%%)%n", objectif.getId(), objectif.getNom(),
+                    serviceEpargne.getMontantActuel(objectif), objectif.getMontantCible(),
+                    serviceEpargne.getPourcentageAtteint(objectif));
         }
     }
 

@@ -244,3 +244,97 @@ Aucun.
 `depasseraCible`, `estVide`, `estAtteint` depuis `Epargne` ; `creerObjectif`, `retirerObjectif`,
 `supprimerObjectif` depuis `Portefeuille`), `ServiceCategorie` (le reste), `ServiceStatistique`,
 puis les vues et les contrôleurs.
+
+## 2026-08-19 — `ServiceEpargne` complet : dernières règles d'épargne extraites d'`Epargne` et `Portefeuille`
+
+### Ce qui a été écrit
+
+- **`Epargne`** : réduite à sa structure — attributs, constructeur avec ses deux validations,
+  getters, et une seule méthode de comportement, `ajouterMouvement(MouvementEpargne)`. Toutes
+  les méthodes de calcul (`getMontantActuel`, `getPourcentageAtteint`, `depasseraCible`,
+  `estVide`, `estAtteint`) et `contribuer`/`retirer` ont été retirées, ainsi que `toString()`
+  (qui appelait ces calculs).
+- **`ServiceEpargne`** : récupère toutes les méthodes retirées d'`Epargne`, sous forme de
+  méthodes qui prennent l'`Epargne` concernée en paramètre (`getMontantActuel(objectif)`,
+  etc.), plus `creerObjectif`, `retirerObjectif`, `supprimerObjectif`, déplacées depuis
+  `Portefeuille`. `contribuerObjectif` et `retirerObjectif` construisent désormais eux-mêmes le
+  `MouvementEpargne` et l'ajoutent via `ajouterMouvement`, au lieu d'appeler `objectif.contribuer()`/`retirer()`.
+- **`Portefeuille`** : `creerObjectif`, `retirerObjectif` (l'ancienne version, qui retirait de
+  l'argent) et `supprimerObjectif` ont disparu. À la place, trois méthodes structurelles,
+  symétriques de celles qui existaient déjà pour les transactions : `genererIdObjectif()`,
+  `ajouterObjectif(Epargne)`, et un `retirerObjectif(Epargne)` qui ne fait plus que retirer
+  l'objectif de la liste (la vérification "objectif vide" est faite en amont par
+  `ServiceEpargne`). `getObjectif(int)` n'a pas bougé : c'est un accès par clé, pas un calcul.
+- **`ServicePortefeuille.getTotalEpargne()`** : ne pouvait plus appeler
+  `objectif.getMontantActuel()` (méthode retirée). Réécrite pour parcourir directement
+  `objectif.getMouvements()`, exactement comme `getSoldeDisponible()` parcourt déjà les
+  transactions sans passer par `ServiceTransaction`.
+- **`Menu`** : les quatre appels à `portefeuille.creerObjectif/retirerObjectif/supprimerObjectif`
+  et `objectif.depasseraCible(...)` remplacés par les équivalents sur `serviceEpargne`.
+  `afficherObjectifs()` construisait sa ligne d'affichage via `objectif.toString()` ; comme ce
+  `toString()` a disparu, la ligne est reconstruite explicitement avec `serviceEpargne.getMontantActuel(objectif)`
+  et `serviceEpargne.getPourcentageAtteint(objectif)`.
+
+### Choix de conception
+
+**Pourquoi les méthodes de calcul de `ServiceEpargne` prennent-elles un `Epargne` en paramètre,
+plutôt qu'un `idObjectif` comme `contribuerObjectif` ?** Ces méthodes (`getMontantActuel`,
+`estVide`...) ne font aucune vérification qui nécessite de retrouver l'objectif dans le
+portefeuille : `Menu` a déjà l'`Epargne` en main (récupérée via `portefeuille.getObjectif(id)`
+pour l'afficher) au moment où il en a besoin. Refaire une recherche par id à chaque appel aurait
+été un aller-retour inutile. `contribuerObjectif`/`retirerObjectif`/`supprimerObjectif`, eux,
+prennent un id : ce sont des opérations déclenchées directement depuis le menu à partir de la
+saisie de l'utilisateur, sans qu'aucun code intermédiaire n'ait déjà l'objet en main.
+
+**Pourquoi `getTotalEpargne()` recalcule-t-il lui-même la somme des mouvements plutôt que
+d'appeler `serviceEpargne.getMontantActuel(objectif)` ?** Parce que `ServiceEpargne` dépend déjà
+de `ServicePortefeuille` dans son constructeur (pour lire le solde disponible et déclencher la
+sauvegarde) : le faire dans l'autre sens aurait créé une dépendance circulaire entre les deux
+services, que le constructeur ne peut pas résoudre. La solution retenue est la même que celle
+déjà en place pour `getSoldeDisponible()`, qui parcourt directement les transactions sans passer
+par `ServiceTransaction` : chaque service reste autonome pour les calculs qu'il expose au niveau
+du portefeuille entier.
+
+**Pourquoi supprimer `toString()` d'`Epargne` plutôt que le garder ?** Il appelait
+`getMontantActuel()` et `getPourcentageAtteint()`, deux calculs. La consigne pour cette étape
+était stricte : `Epargne` ne garde que ses attributs, son constructeur, ses getters, et
+`ajouterMouvement`. Garder un `toString()` qui recalcule aurait réintroduit exactement le genre
+de logique que cette étape avait pour but de sortir de l'entité. L'affichage correspondant a été
+reconstruit dans `Menu`, qui a déjà accès à `serviceEpargne`.
+
+**Pourquoi `Portefeuille.retirerObjectif(Epargne)` réutilise-t-il ce nom, alors qu'il désignait
+avant une tout autre opération (retirer de l'argent) ?** Une fois l'opération "retirer de
+l'argent" déplacée vers `ServiceEpargne.retirerObjectif(id, montant, date)`, le nom se libère
+dans `Portefeuille` pour désigner ce qu'il fait réellement maintenant : une suppression
+structurelle de la liste, exactement le rôle que joue déjà `retirerTransaction(Transaction)`
+pour les transactions. Les deux méthodes sont maintenant symétriques.
+
+### Points à savoir défendre
+
+- **Le montant épargné d'un objectif est-il stocké quelque part ?** Non, jamais : ni dans
+  `Epargne` (qui ne garde que la liste des mouvements), ni dans `ServiceEpargne`. Il est
+  recalculé à chaque appel de `getMontantActuel(objectif)` en parcourant les mouvements, comme
+  l'exige la règle de gestion.
+- **Que se passe-t-il si on essaie d'appeler `objectif.getMontantActuel()` directement depuis
+  `Menu`, comme avant cette étape ?** Ça ne compile plus : la méthode n'existe plus sur
+  `Epargne`. C'est voulu — la seule façon d'obtenir ce montant est de passer par
+  `serviceEpargne.getMontantActuel(objectif)`, ce qui garantit qu'aucun calcul métier ne peut se
+  retrouver ailleurs que dans un service.
+- **Pourquoi la suppression d'un objectif est-elle refusée avec `IllegalStateException` et pas
+  `IllegalArgumentException` ?** Le montant du retrait ou l'identifiant ne sont pas en cause :
+  c'est l'état actuel de l'objectif (non vide) qui empêche l'opération à cet instant précis. Une
+  contribution plus tard, un retrait entre-temps, et l'opération redeviendrait possible sans que
+  rien n'ait changé dans les arguments passés.
+
+### Pièges rencontrés
+
+Aucun — la compilation a servi de garde-fou à chaque déplacement : `ServicePortefeuille` ne
+compilait plus tant que `getTotalEpargne()` n'avait pas été réécrite, ce qui a permis de repérer
+cette dépendance cachée sur `Epargne.getMontantActuel()` immédiatement plutôt qu'à l'exécution.
+
+### Reste à faire
+
+`ServiceCategorie` (le reste : `activerCategorie`, `desactiverCategorie`,
+`getCategoriesDisponibles`, `aCategorieActiveDeType`), `ServiceStatistique`, puis la séparation
+de `Menu` en vues (`vue/`) et contrôleurs (`controleur/`) — `Menu` détient encore directement
+`Portefeuille`, ce qui n'est plus permis une fois cette séparation faite.

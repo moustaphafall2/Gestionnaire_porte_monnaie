@@ -102,28 +102,22 @@ public class Portefeuille {
 
     // Gestion des objectifs d'épargne
 
-    public Epargne creerObjectif(String nom, double montantCible, LocalDate dateLimite) {
-        Epargne objectif = new Epargne(prochainIdObjectif, nom, montantCible, dateLimite);
+    // Distribue l'identifiant suivant et avance le compteur, comme genererIdTransaction().
+    // La construction de l'Epargne elle-même se fait dans ServiceEpargne.
+    public int genererIdObjectif() {
+        return prochainIdObjectif++;
+    }
+
+    // Remplace l'ancienne construction dans creerObjectif() : ajouter un objectif est un ajout
+    // à la liste, pas une substitution d'attribut.
+    public void ajouterObjectif(Epargne objectif) {
         objectifs.add(objectif);
-        prochainIdObjectif++;
-        return objectif;
     }
 
-    // L'exception si le retrait dépasse le montant épargné est déjà levée par Epargne.retirer().
-    public void retirerObjectif(int idObjectif, double montant, LocalDate date) {
-        Epargne objectif = trouverObjectif(idObjectif);
-        objectif.retirer(montant, date);
-    }
-
-    // Un objectif ne peut être supprimé que s'il est vide : l'utilisateur doit d'abord
-    // décider de la destination des sommes qui y étaient placées. Refusé à cause de l'état
-    // de l'objectif (pas d'une donnée invalide) : IllegalStateException.
-    public void supprimerObjectif(int idObjectif) {
-        Epargne objectif = trouverObjectif(idObjectif);
-        if (!objectif.estVide()) {
-            throw new IllegalStateException("L'objectif n'est pas vide (" + objectif.getMontantActuel()
-                    + " FCFA restants), retirez d'abord les sommes épargnées.");
-        }
+    // Retrait structurel de la liste (pas la règle de gestion "objectif vide" : celle-ci est
+    // vérifiée en amont par ServiceEpargne, qui appelle cette méthode une fois la vérification
+    // passée). Symétrique de retirerTransaction(Transaction).
+    public void retirerObjectif(Epargne objectif) {
         objectifs.remove(objectif);
     }
 
@@ -137,7 +131,7 @@ public class Portefeuille {
         return trouverObjectif(idObjectif);
     }
 
-    // Recherche interne d'un objectif par id, réutilisée par contribuerObjectif, retirerObjectif et supprimerObjectif
+    // Recherche interne d'un objectif par id, utilisée par getObjectif()
     private Epargne trouverObjectif(int idObjectif) {
         for (Epargne objectif : objectifs) {
             if (objectif.getId() == idObjectif) {
