@@ -1,6 +1,9 @@
-package metier;
+package modele.entite;
 
 import java.time.LocalDate;
+
+import modele.enumeration.Categorie;
+import modele.enumeration.TypeTransaction;
 /*
     * La classe Transaction représente une transaction financière,
     * qui peut être soit une dépense, soit un revenu.

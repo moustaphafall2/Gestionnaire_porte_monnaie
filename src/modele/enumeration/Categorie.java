@@ -1,4 +1,4 @@
-package metier;
+package modele.enumeration;
 
 import java.util.ArrayList;
 import java.util.List;

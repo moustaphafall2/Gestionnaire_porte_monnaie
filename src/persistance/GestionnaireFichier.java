@@ -13,7 +13,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 
 import metier.ErreurSauvegardeException;
-import metier.Portefeuille;
+import modele.entite.Portefeuille;
 
 /*
     * La classe GestionnaireFichier est la seule classe autorisée à lire ou écrire sur le disque.

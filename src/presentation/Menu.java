@@ -7,13 +7,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
-import metier.Categorie;
-import metier.Epargne;
 import metier.ErreurSauvegardeException;
-import metier.MouvementEpargne;
-import metier.Portefeuille;
-import metier.Transaction;
-import metier.TypeTransaction;
+import modele.entite.Epargne;
+import modele.entite.MouvementEpargne;
+import modele.entite.Portefeuille;
+import modele.entite.Transaction;
+import modele.enumeration.Categorie;
+import modele.enumeration.TypeTransaction;
+import modele.service.ServiceEpargne;
+import modele.service.ServicePortefeuille;
+import modele.service.ServiceTransaction;
 
 /*
     * La classe Menu gère uniquement l'interaction avec l'utilisateur dans la console :
@@ -28,10 +31,16 @@ public class Menu {
     private static final DateTimeFormatter FORMAT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private Portefeuille portefeuille;
+    private ServicePortefeuille servicePortefeuille;
+    private ServiceEpargne serviceEpargne;
+    private ServiceTransaction serviceTransaction;
     private Scanner scanner;
 
-    public Menu(Portefeuille portefeuille) {
+    public Menu(Portefeuille portefeuille, ServicePortefeuille servicePortefeuille, ServiceEpargne serviceEpargne, ServiceTransaction serviceTransaction) {
         this.portefeuille = portefeuille;
+        this.servicePortefeuille = servicePortefeuille;
+        this.serviceEpargne = serviceEpargne;
+        this.serviceTransaction = serviceTransaction;
         this.scanner = new Scanner(System.in);
     }
 
@@ -86,8 +95,8 @@ public class Menu {
     // ----- 1. Solde -----
 
     public void gererVoirSolde() {
-        System.out.printf("Solde disponible : %.2f FCFA%n", portefeuille.getSoldeDisponible());
-        System.out.printf("Total épargné : %.2f FCFA%n", portefeuille.getTotalEpargne());
+        System.out.printf("Solde disponible : %.2f FCFA%n", servicePortefeuille.getSoldeDisponible());
+        System.out.printf("Total épargné : %.2f FCFA%n", servicePortefeuille.getTotalEpargne());
     }
 
     // ----- 2 et 3. Ajouter une dépense / un revenu -----
@@ -103,7 +112,7 @@ public class Menu {
         LocalDate date = demanderDate("Date (JJ/MM/AAAA, vide = aujourd'hui) : ");
         String description = demanderTexte("Description (facultative) : ");
 
-        double soldeApres = portefeuille.soldeApresDepense(montant);
+        double soldeApres = servicePortefeuille.soldeApresDepense(montant);
         System.out.printf("Récapitulatif : %.2f FCFA, %s, le %s%n", montant, categorie.getLibelle(), date.format(FORMAT_DATE));
         if (soldeApres < 0) {
             System.out.printf("Attention : cette dépense rendra votre solde négatif (nouveau solde : %.2f FCFA).%n", soldeApres);
@@ -114,7 +123,7 @@ public class Menu {
             return;
         }
 
-        portefeuille.ajouterDepense(montant, categorie, date, description);
+        serviceTransaction.ajouterDepense(montant, categorie, date, description);
         System.out.println("Dépense enregistrée.");
     }
 
@@ -135,7 +144,7 @@ public class Menu {
             return;
         }
 
-        portefeuille.ajouterRevenu(montant, categorie, date, description);
+        serviceTransaction.ajouterRevenu(montant, categorie, date, description);
         System.out.println("Revenu enregistré.");
     }
 
@@ -152,14 +161,14 @@ public class Menu {
 
         List<Transaction> resultat;
         switch (choix) {
-            case 1 -> resultat = portefeuille.getHistorique();
+            case 1 -> resultat = serviceTransaction.getHistorique();
             case 2 -> {
                 LocalDate debut = demanderDate("Date de début (JJ/MM/AAAA) : ");
                 LocalDate fin = demanderDate("Date de fin (JJ/MM/AAAA) : ");
-                resultat = portefeuille.filtrerParDate(debut, fin);
+                resultat = serviceTransaction.filtrerParDate(debut, fin);
             }
-            case 3 -> resultat = portefeuille.filtrerParCategorie(demanderCategorieParmiToutes());
-            case 4 -> resultat = portefeuille.filtrerParType(demanderType());
+            case 3 -> resultat = serviceTransaction.filtrerParCategorie(demanderCategorieParmiToutes());
+            case 4 -> resultat = serviceTransaction.filtrerParType(demanderType());
             case 5 -> {
                 gererModificationSuppressionTransaction();
                 return;
@@ -183,7 +192,7 @@ public class Menu {
     }
 
     public void gererModificationSuppressionTransaction() {
-        afficherTransactions(portefeuille.getHistorique());
+        afficherTransactions(serviceTransaction.getHistorique());
         int id = lireEntier("Identifiant de la transaction à modifier/supprimer (0 pour annuler) : ");
         if (id == 0) {
             return;
@@ -199,11 +208,11 @@ public class Menu {
                 LocalDate date = demanderDate("Nouvelle date (JJ/MM/AAAA, vide = aujourd'hui) : ");
                 Categorie categorie = demanderCategorieParmiToutes();
                 String description = demanderTexte("Nouvelle description (facultative) : ");
-                portefeuille.modifierTransaction(id, montant, categorie, date, description);
+                serviceTransaction.modifierTransaction(id, montant, categorie, date, description);
                 System.out.println("Transaction modifiée.");
             } else if (choix == 2) {
                 if (demanderConfirmation("Confirmer la suppression de cette transaction ?")) {
-                    portefeuille.supprimerTransaction(id);
+                    serviceTransaction.supprimerTransaction(id);
                     System.out.println("Transaction supprimée.");
                 } else {
                     System.out.println("Opération annulée.");
@@ -244,7 +253,7 @@ public class Menu {
                     int id = lireEntier("Identifiant de l'objectif : ");
                     Epargne objectif = portefeuille.getObjectif(id);
                     double montant = demanderMontant("Montant à ajouter : ");
-                    System.out.printf("Solde disponible actuel : %.2f FCFA%n", portefeuille.getSoldeDisponible());
+                    System.out.printf("Solde disponible actuel : %.2f FCFA%n", servicePortefeuille.getSoldeDisponible());
                     if (objectif.depasseraCible(montant)) {
                         System.out.println("Attention : cette contribution dépassera le montant cible de l'objectif.");
                     }
@@ -254,7 +263,7 @@ public class Menu {
                         System.out.println("Opération annulée.");
                         return;
                     }
-                    portefeuille.contribuerObjectif(id, montant, date);
+                    serviceEpargne.contribuerObjectif(id, montant, date);
                     System.out.println("Contribution enregistrée.");
                 }
                 case 3 -> {

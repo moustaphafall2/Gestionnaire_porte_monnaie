@@ -4,3 +4,5 @@ bin/
 
 # Données de l'utilisateur (générées à l'exécution, pas du code source)
 portefeuille.json
+
+CLAUDE.md

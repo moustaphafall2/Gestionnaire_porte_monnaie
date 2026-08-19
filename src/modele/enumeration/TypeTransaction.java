@@ -1,4 +1,4 @@
-package metier;
+package modele.enumeration;
 
 /*
     * L'énumération TypeTransaction représente les types de transactions possibles dans le système.

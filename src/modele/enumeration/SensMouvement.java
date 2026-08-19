@@ -1,4 +1,4 @@
-package metier;
+package modele.enumeration;
 
 /*
     * L'énumération SensMouvement représente les sens de mouvement possibles pour les transactions financières.

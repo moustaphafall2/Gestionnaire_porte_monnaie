@@ -1,7 +1,9 @@
-package metier;
+package modele.entite;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+
+import modele.enumeration.SensMouvement;
 /*
     * La classe MouvementEpargne représente un mouvement d'épargne dans le système.
     * Chaque mouvement d'épargne a un montant, un sens (contribution ou retrait), et une date.

@@ -1,9 +1,11 @@
-package metier;
+package modele.entite;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import modele.enumeration.SensMouvement;
 
 /**
     * Une épargne est un objectif financier que l'utilisateur souhaite atteindre en mettant de l'argent de côté.
@@ -23,11 +25,29 @@ public class Epargne {
     private List<MouvementEpargne> mouvements;
 
     public Epargne(int id, String nom, double montantCible, LocalDate dateLimite) {
+        validerNom(nom);
+        validerMontantCible(montantCible);
+
         this.id = id;
         this.nom = nom;
         this.montantCible = montantCible;
         this.dateLimite = dateLimite;
         this.mouvements = new ArrayList<>();
+    }
+
+    // Méthodes de validation
+    // Elles ne font rien si la valeur est correcte, et lèvent une exception sinon.
+
+    private void validerNom(String nom) {
+        if (nom == null || nom.isBlank()) {
+            throw new IllegalArgumentException("Le nom de l'objectif est obligatoire.");
+        }
+    }
+
+    private void validerMontantCible(double montantCible) {
+        if (montantCible <= 0) {
+            throw new IllegalArgumentException("Le montant cible doit être strictement positif.");
+        }
     }
 
     // Getters
