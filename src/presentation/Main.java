@@ -4,6 +4,7 @@ import modele.entite.Portefeuille;
 import modele.service.ServiceCategorie;
 import modele.service.ServiceEpargne;
 import modele.service.ServicePortefeuille;
+import modele.service.ServiceStatistique;
 import modele.service.ServiceTransaction;
 import persistance.GestionnaireFichier;
 
@@ -20,7 +21,8 @@ public class Main {
         ServiceEpargne serviceEpargne = new ServiceEpargne(servicePortefeuille);
         ServiceCategorie serviceCategorie = new ServiceCategorie(servicePortefeuille);
         ServiceTransaction serviceTransaction = new ServiceTransaction(servicePortefeuille, serviceCategorie);
-        Menu menu = new Menu(portefeuille, servicePortefeuille, serviceEpargne, serviceTransaction);
+        ServiceStatistique serviceStatistique = new ServiceStatistique(servicePortefeuille);
+        Menu menu = new Menu(portefeuille, servicePortefeuille, serviceEpargne, serviceTransaction, serviceCategorie, serviceStatistique);
         menu.lancer();
     }
 }

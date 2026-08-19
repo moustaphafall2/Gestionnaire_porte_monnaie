@@ -14,8 +14,10 @@ import modele.entite.Portefeuille;
 import modele.entite.Transaction;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
+import modele.service.ServiceCategorie;
 import modele.service.ServiceEpargne;
 import modele.service.ServicePortefeuille;
+import modele.service.ServiceStatistique;
 import modele.service.ServiceTransaction;
 
 /*
@@ -34,13 +36,18 @@ public class Menu {
     private ServicePortefeuille servicePortefeuille;
     private ServiceEpargne serviceEpargne;
     private ServiceTransaction serviceTransaction;
+    private ServiceCategorie serviceCategorie;
+    private ServiceStatistique serviceStatistique;
     private Scanner scanner;
 
-    public Menu(Portefeuille portefeuille, ServicePortefeuille servicePortefeuille, ServiceEpargne serviceEpargne, ServiceTransaction serviceTransaction) {
+    public Menu(Portefeuille portefeuille, ServicePortefeuille servicePortefeuille, ServiceEpargne serviceEpargne,
+            ServiceTransaction serviceTransaction, ServiceCategorie serviceCategorie, ServiceStatistique serviceStatistique) {
         this.portefeuille = portefeuille;
         this.servicePortefeuille = servicePortefeuille;
         this.serviceEpargne = serviceEpargne;
         this.serviceTransaction = serviceTransaction;
+        this.serviceCategorie = serviceCategorie;
+        this.serviceStatistique = serviceStatistique;
         this.scanner = new Scanner(System.in);
     }
 
@@ -102,7 +109,7 @@ public class Menu {
     // ----- 2 et 3. Ajouter une dépense / un revenu -----
 
     public void gererAjouterDepense() {
-        if (!portefeuille.aCategorieActiveDeType(TypeTransaction.DEPENSE)) {
+        if (!serviceCategorie.aCategorieActiveDeType(TypeTransaction.DEPENSE)) {
             System.out.println("Aucune catégorie de dépense active. Activez-en une avant de continuer (menu Catégories).");
             return;
         }
@@ -128,7 +135,7 @@ public class Menu {
     }
 
     public void gererAjouterRevenu() {
-        if (!portefeuille.aCategorieActiveDeType(TypeTransaction.REVENU)) {
+        if (!serviceCategorie.aCategorieActiveDeType(TypeTransaction.REVENU)) {
             System.out.println("Aucune catégorie de revenu active. Activez-en une avant de continuer (menu Catégories).");
             return;
         }
@@ -343,7 +350,7 @@ public class Menu {
         int choix = lireEntier("Votre choix : ");
 
         if (choix == 1) {
-            List<Categorie> disponibles = portefeuille.getCategoriesDisponibles();
+            List<Categorie> disponibles = serviceCategorie.getCategoriesDisponibles();
             if (disponibles.isEmpty()) {
                 System.out.println("Toutes les catégories sont déjà actives.");
                 return;
@@ -385,7 +392,7 @@ public class Menu {
         LocalDate debut = demanderDate("Date de début (JJ/MM/AAAA) : ");
         LocalDate fin = demanderDate("Date de fin (JJ/MM/AAAA) : ");
 
-        Map<Categorie, Double> totauxParCategorie = portefeuille.getTotalParCategorie(debut, fin);
+        Map<Categorie, Double> totauxParCategorie = serviceStatistique.getTotalParCategorie(debut, fin);
         System.out.println("Total dépensé par catégorie :");
         if (totauxParCategorie.isEmpty()) {
             System.out.println("  Aucune dépense sur cette période.");
@@ -395,7 +402,7 @@ public class Menu {
             }
         }
 
-        double[] totaux = portefeuille.getTotalRevenusEtDepenses(debut, fin);
+        double[] totaux = serviceStatistique.getTotalRevenusEtDepenses(debut, fin);
         System.out.printf("Total des revenus : %.2f FCFA%n", totaux[0]);
         System.out.printf("Total des dépenses : %.2f FCFA%n", totaux[1]);
     }

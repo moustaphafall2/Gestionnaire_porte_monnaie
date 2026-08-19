@@ -392,3 +392,70 @@ Aucun.
 
 Inchangé : `ServiceCategorie` (le reste), `ServiceStatistique`, puis la séparation de `Menu` en
 vues et contrôleurs.
+
+## 2026-08-19 — `ServiceCategorie` et `ServiceStatistique` : `Portefeuille` devient une entité pure
+
+### Ce qui a été écrit
+
+- **`ServiceCategorie`** : deux méthodes de plus, déplacées depuis `Portefeuille` sans
+  changement de logique — `aCategorieActiveDeType(TypeTransaction)` et
+  `getCategoriesDisponibles()`. `activerCategorie`/`desactiverCategorie` restent pour l'instant
+  dans `Portefeuille` : pas demandées pour cette étape.
+- **`ServiceStatistique`** (nouvelle classe, `modele.service`) : `getTotalParCategorie(debut, fin)`
+  et `getTotalRevenusEtDepenses(debut, fin)`, déplacées depuis `Portefeuille` sans changement de
+  logique. Lecture seule : pas d'appel à `sauvegarder()`, rien n'est modifié.
+- **`Portefeuille`** : perd les quatre méthodes ci-dessus, et les imports devenus inutiles
+  (`LocalDate`, `HashMap`, `Map`, `TypeTransaction`). Le commentaire d'en-tête de la classe, qui
+  annonçait encore "de la logique métier à extraire progressivement", est mis à jour : ce n'est
+  plus vrai.
+- **`Menu`** et **`Main`** : `Menu` reçoit deux nouveaux paramètres de constructeur,
+  `ServiceCategorie` et `ServiceStatistique` (le premier existait déjà dans `Main` pour
+  `ServiceTransaction`, mais n'était pas passé à `Menu` ; le second est construit dans `Main`).
+  Les quatre appels `portefeuille.aCategorieActiveDeType(...)`, `.getCategoriesDisponibles()`,
+  `.getTotalParCategorie(...)`, `.getTotalRevenusEtDepenses(...)` remplacés par les équivalents
+  sur les services.
+
+### Choix de conception
+
+**Pourquoi les mouvements d'épargne n'ont demandé aucun traitement particulier dans
+`ServiceStatistique` ?** La règle de gestion ("mouvements d'épargne exclus des statistiques")
+était déjà respectée avant même cette étape : `getTotalParCategorie` et
+`getTotalRevenusEtDepenses` n'ont jamais parcouru que `getTransactions()`, et les mouvements
+d'épargne n'ont jamais été stockés dans cette liste (ils vivent dans `Epargne.mouvements`,
+depuis le sprint 4). Déplacer ces deux méthodes tel quel suffisait donc à préserver la règle —
+rien à ajouter, juste à vérifier que le déplacement ne changeait rien à ce qui est parcouru.
+
+**Pourquoi `ServiceStatistique` n'appelle-t-il jamais `sauvegarder()` ?** Contrairement aux
+autres services, il ne modifie jamais `Portefeuille` : ses deux méthodes ne font que lire et
+agréger. Appeler `sauvegarder()` ici aurait été une écriture disque inutile à chaque
+consultation des statistiques.
+
+### Points à savoir défendre
+
+- **`Portefeuille` est-elle maintenant une entité "pure" au sens du `CLAUDE.md` ?** Oui : elle ne
+  contient plus que des attributs privés, un constructeur, des getters (toujours des vues non
+  modifiables pour les listes/ensembles), des méthodes d'ajout/retrait dans ses collections, la
+  génération de ses compteurs d'identifiants, et un seul accès par clé (`getObjectif`/
+  `trouverObjectif`, une recherche, pas un calcul). Aucune boucle n'y agrège plus de valeurs, ce
+  qui était le test donné dans le `CLAUDE.md` pour repérer un calcul égaré dans une entité.
+- **Pourquoi `activerCategorie`/`desactiverCategorie` restent-elles dans `Portefeuille` alors
+  que le reste de la gestion des catégories est parti dans `ServiceCategorie` ?** Ce ne sont pas
+  des calculs : ce sont des ajouts/retraits dans un `Set`, strictement structurels, au même
+  titre que `ajouterTransaction` ou `ajouterObjectif`. Rien n'empêche de les y laisser
+  définitivement, mais leur migration n'a pas été demandée pour cette étape — pas d'anticipation.
+- **`getObjectif`/`trouverObjectif` ne sont-elles pas des exceptions à la règle "pas de boucle
+  dans une entité" ?** Elles parcourent bien une liste, mais pour retrouver un élément par son
+  identifiant, pas pour produire une valeur agrégée (somme, total, booléen dérivé de plusieurs
+  éléments). C'est la distinction déjà actée pour cette méthode avant cette étape : un accès par
+  clé plutôt qu'un calcul.
+
+### Pièges rencontrés
+
+Aucun.
+
+### Reste à faire
+
+La séparation de `Menu` en vues (`vue/`) et contrôleurs (`controleur/`) — `Menu` détient encore
+directement `Portefeuille` (pour `getCategoriesActives`, `getObjectif`, `getObjectifs`,
+`activerCategorie`, `desactiverCategorie`), ce qui n'est plus permis une fois cette séparation
+faite.

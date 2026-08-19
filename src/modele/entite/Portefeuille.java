@@ -1,23 +1,20 @@
 package modele.entite;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import modele.enumeration.Categorie;
-import modele.enumeration.TypeTransaction;
 
 /*
     * La classe Portefeuille regroupe toutes les données de l'utilisateur : les transactions,
-    * les catégories actives et les objectifs d'épargne. Migration en cours vers l'architecture
-    * MVC : elle contient encore une partie de la logique métier (à extraire progressivement
-    * vers les classes de modele.service), mais plus rien de la persistance — c'est
-    * ServicePortefeuille qui détient le GestionnaireFichier et déclenche la sauvegarde.
+    * les catégories actives et les objectifs d'épargne. Elle ne porte plus aucun calcul ni
+    * règle de gestion : uniquement sa structure, l'ajout/retrait dans ses listes et son
+    * ensemble, la génération des identifiants, et l'accès par clé (getObjectif). Tous les
+    * calculs vivent dans modele.service, et la persistance dans ServicePortefeuille, seul à
+    * détenir le GestionnaireFichier et à déclencher la sauvegarde.
 */
 public class Portefeuille {
 
@@ -66,28 +63,6 @@ public class Portefeuille {
 
     public Set<Categorie> getCategoriesActives() {
         return Collections.unmodifiableSet(categoriesActives);
-    }
-
-    // Indique si au moins une catégorie active correspond à ce type. Utilisé par Menu
-    // pour vérifier la précondition avant de proposer d'ajouter une dépense/un revenu.
-    public boolean aCategorieActiveDeType(TypeTransaction type) {
-        for (Categorie categorie : categoriesActives) {
-            if (categorie.getType() == type) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // Catégories de la liste complète (l'énumération) qui ne sont pas encore actives
-    public List<Categorie> getCategoriesDisponibles() {
-        List<Categorie> disponibles = new ArrayList<>();
-        for (Categorie categorie : Categorie.values()) {
-            if (!categoriesActives.contains(categorie)) {
-                disponibles.add(categorie);
-            }
-        }
-        return disponibles;
     }
 
     public void activerCategorie(Categorie categorie) {
@@ -139,51 +114,5 @@ public class Portefeuille {
             }
         }
         throw new IllegalArgumentException("Aucun objectif avec l'identifiant " + idObjectif + ".");
-    }
-
-    // Statistiques
-    // Ces deux méthodes restent ici temporairement (elles migreront vers ServiceStatistique,
-    // pas encore construit). filtrerParDate ayant déplacé vers ServiceTransaction, le filtrage
-    // par période est réécrit ici en ligne plutôt que de dépendre d'une méthode qui n'existe
-    // plus dans l'entité.
-
-    // Total dépensé par catégorie, sur une période donnée
-    public Map<Categorie, Double> getTotalParCategorie(LocalDate debut, LocalDate fin) {
-        Map<Categorie, Double> totaux = new HashMap<>();
-
-        for (Transaction transaction : transactions) {
-            LocalDate date = transaction.getDate();
-            if (date.isBefore(debut) || date.isAfter(fin)) {
-                continue;
-            }
-            if (transaction.getType() == TypeTransaction.DEPENSE) {
-                Categorie categorie = transaction.getCategorie();
-                double totalActuel = totaux.getOrDefault(categorie, 0.0);
-                totaux.put(categorie, totalActuel + transaction.getMontant());
-            }
-        }
-
-        return totaux;
-    }
-
-    // Total des revenus et des dépenses sur une période donnée.
-    // Index 0 : total des revenus. Index 1 : total des dépenses.
-    public double[] getTotalRevenusEtDepenses(LocalDate debut, LocalDate fin) {
-        double totalRevenus = 0;
-        double totalDepenses = 0;
-
-        for (Transaction transaction : transactions) {
-            LocalDate date = transaction.getDate();
-            if (date.isBefore(debut) || date.isAfter(fin)) {
-                continue;
-            }
-            if (transaction.getType() == TypeTransaction.REVENU) {
-                totalRevenus += transaction.getMontant();
-            } else {
-                totalDepenses += transaction.getMontant();
-            }
-        }
-
-        return new double[] { totalRevenus, totalDepenses };
     }
 }
