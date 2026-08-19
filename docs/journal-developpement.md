@@ -182,3 +182,65 @@ méthodes tout juste retirées de `Portefeuille`), corrigée en redirigeant ces 
 `getCategoriesDisponibles`, `aCategorieActiveDeType`), la suite de `ServiceEpargne`
 (`creerObjectif`, `retirerObjectif`, `supprimerObjectif`), `ServiceStatistique`
 (`getTotalParCategorie`, `getTotalRevenusEtDepenses`), puis les vues et les contrôleurs.
+
+## 2026-08-19 — Correction : validation du nom et du montant cible d'`Epargne`
+
+### Ce qui a été écrit
+
+`Epargne` : ajout de `validerNom(String)` et `validerMontantCible(double)` (privées), appelées
+dans le constructeur, sur le même modèle que `Transaction`.
+
+### Choix de conception
+
+Ce n'était pas un manquement de conception (une méthode mal placée), mais un vrai bug : la règle
+de gestion "Nom d'objectif, montant cible : nom non vide, cible strictement positive" (tableau
+du `CLAUDE.md`, colonne "Entité") n'était tout simplement pas implémentée. Traité en priorité,
+séparément du reste de la migration.
+
+### Points à savoir défendre
+
+**Pourquoi cette règle est-elle dans l'entité et pas dans un service ?** Parce qu'elle porte
+uniquement sur les propres champs d'`Epargne` (son nom, son montant cible) — exactement ce que
+les entités ont le droit de valider elles-mêmes, contrairement à une règle qui dépendrait d'un
+autre objet (comme "contribution > solde disponible", qui elle regarde l'état du portefeuille).
+
+### Pièges rencontrés
+
+Aucun.
+
+### Reste à faire
+
+Voir l'entrée précédente.
+
+## 2026-08-19 — Visibilité des validateurs de `MouvementEpargne`
+
+### Ce qui a été écrit
+
+`MouvementEpargne` : `validerMontant`, `validerSens`, `validerDate` passées de `public` à
+`private`.
+
+### Choix de conception
+
+Incohérence de style relevée lors de l'audit précédent : `Transaction` déclare ses méthodes de
+validation équivalentes en `private` (elles ne servent qu'en interne, au constructeur et aux
+setters), alors que `MouvementEpargne` les avait laissées `public` sans raison. Vérifié avant
+la modification qu'aucune classe extérieure ne les appelait (`grep` sur tout `src/`) : seul le
+constructeur de `MouvementEpargne` s'en sert. Aucun appelant à corriger.
+
+### Points à savoir défendre
+
+**Pourquoi ces méthodes doivent-elles être `private` plutôt que `public` ?** Elles ne font sens
+que comme étape interne de construction d'un `MouvementEpargne` valide. Les laisser publiques
+suggérait à tort qu'elles pouvaient être appelées indépendamment depuis l'extérieur, ce qui
+n'a pas de raison d'être et aurait pu induire en erreur un futur lecteur du code.
+
+### Pièges rencontrés
+
+Aucun.
+
+### Reste à faire
+
+`ServiceEpargne` complet (`getMontantActuel`, `getPourcentageAtteint`, `contribuer`, `retirer`,
+`depasseraCible`, `estVide`, `estAtteint` depuis `Epargne` ; `creerObjectif`, `retirerObjectif`,
+`supprimerObjectif` depuis `Portefeuille`), `ServiceCategorie` (le reste), `ServiceStatistique`,
+puis les vues et les contrôleurs.

@@ -28,19 +28,19 @@ public class MouvementEpargne {
         this.date = date;
     }
     // Methodes de validation
-    public void validerMontant(double montant) {
+    private void validerMontant(double montant) {
         if (montant <= 0) {
             throw new IllegalArgumentException("Le montant doit être strictement positif.");
         }
     }
 
-    public void validerSens(SensMouvement sens) {
+    private void validerSens(SensMouvement sens) {
         if (sens == null) {
             throw new IllegalArgumentException("Le sens du mouvement est obligatoire.");
         }
     }
 
-    public void validerDate(LocalDate date) {
+    private void validerDate(LocalDate date) {
         if (date == null) {
             throw new IllegalArgumentException("La date est obligatoire.");
         }
