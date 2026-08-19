@@ -31,21 +31,10 @@ public class ServiceEpargne {
         this.servicePortefeuille = servicePortefeuille;
     }
 
-    // Montant actuellement épargné sur cet objectif. Règle de gestion : jamais stocké, toujours
-    // recalculé à partir des mouvements (somme des contributions moins somme des retraits).
+    // Montant actuellement épargné sur cet objectif. Le calcul passe par CalculEpargne, partagé
+    // avec ServicePortefeuille (getTotalEpargne), pour qu'il n'existe qu'à un seul endroit.
     public double getMontantActuel(Epargne objectif) {
-        double sommeContributions = 0;
-        double sommeRetraits = 0;
-
-        for (MouvementEpargne mouvement : objectif.getMouvements()) {
-            if (mouvement.getSens() == SensMouvement.CONTRIBUTION) {
-                sommeContributions += mouvement.getMontant();
-            } else {
-                sommeRetraits += mouvement.getMontant();
-            }
-        }
-
-        return sommeContributions - sommeRetraits;
+        return CalculEpargne.calculerMontantActuel(objectif);
     }
 
     public double getPourcentageAtteint(Epargne objectif) {

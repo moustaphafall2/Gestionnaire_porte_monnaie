@@ -1,10 +1,8 @@
 package modele.service;
 
 import modele.entite.Epargne;
-import modele.entite.MouvementEpargne;
 import modele.entite.Portefeuille;
 import modele.entite.Transaction;
-import modele.enumeration.SensMouvement;
 import modele.enumeration.TypeTransaction;
 import persistance.GestionnaireFichier;
 
@@ -43,21 +41,13 @@ public class ServicePortefeuille {
         return totalRevenus - totalDepenses - getTotalEpargne();
     }
 
-    // Somme du montant actuellement épargné sur tous les objectifs. Calculé ici plutôt que
-    // délégué à ServiceEpargne : ServiceEpargne dépend déjà de ServicePortefeuille (pour le
-    // solde disponible et la sauvegarde), une dépendance dans l'autre sens créerait un cycle.
-    // Même logique que getSoldeDisponible() ci-dessus, qui parcourt directement les
-    // transactions plutôt que de passer par ServiceTransaction.
+    // Somme du montant actuellement épargné sur tous les objectifs. Le calcul lui-même passe
+    // par CalculEpargne (partagé avec ServiceEpargne) plutôt que d'être refait ici : le montant
+    // actuel d'un objectif ne doit être calculé qu'à un seul endroit du code.
     public double getTotalEpargne() {
         double total = 0;
         for (Epargne objectif : portefeuille.getObjectifs()) {
-            for (MouvementEpargne mouvement : objectif.getMouvements()) {
-                if (mouvement.getSens() == SensMouvement.CONTRIBUTION) {
-                    total += mouvement.getMontant();
-                } else {
-                    total -= mouvement.getMontant();
-                }
-            }
+            total += CalculEpargne.calculerMontantActuel(objectif);
         }
         return total;
     }

@@ -338,3 +338,57 @@ cette dépendance cachée sur `Epargne.getMontantActuel()` immédiatement plutô
 `getCategoriesDisponibles`, `aCategorieActiveDeType`), `ServiceStatistique`, puis la séparation
 de `Menu` en vues (`vue/`) et contrôleurs (`controleur/`) — `Menu` détient encore directement
 `Portefeuille`, ce qui n'est plus permis une fois cette séparation faite.
+
+## 2026-08-19 — `CalculEpargne` : un seul calcul du montant actuel, partagé sans dépendance circulaire
+
+### Ce qui a été écrit
+
+- **`CalculEpargne`** (nouvelle classe, `modele.service`) : une seule méthode statique,
+  `calculerMontantActuel(Epargne)`, qui parcourt les mouvements de l'objectif et renvoie somme
+  des contributions moins somme des retraits. Constructeur privé : c'est une classe utilitaire,
+  jamais destinée à être instanciée.
+- **`ServiceEpargne.getMontantActuel(Epargne)`** : ne recalcule plus elle-même, délègue à
+  `CalculEpargne.calculerMontantActuel(objectif)`.
+- **`ServicePortefeuille.getTotalEpargne()`** : délègue de la même façon, au lieu de reparcourir
+  les mouvements en double de ce que faisait `ServiceEpargne`.
+
+### Choix de conception
+
+**Pourquoi une classe séparée plutôt qu'une méthode statique sur `ServiceEpargne` ?** Envisagé,
+puis écarté : `ServiceEpargne` a un constructeur qui prend `ServicePortefeuille`, ses méthodes
+sont toutes des méthodes d'instance qui portent des règles de gestion (contribution refusée si
+solde insuffisant, etc.). Y ajouter une méthode statique sans rapport avec une instance aurait
+mélangé deux natures de code différentes dans la même classe : difficile à expliquer d'un coup
+("pourquoi celle-ci n'a pas besoin d'objet ServiceEpargne pour être appelée, contrairement aux
+autres ?"). `CalculEpargne` n'a qu'un seul travail, il est visible au premier coup d'œil sur la
+classe entière : un pur calcul, sans état, sans dépendance.
+
+**Pourquoi ça règle le problème de dépendance circulaire.** `ServiceEpargne` dépend de
+`ServicePortefeuille` (pour lire le solde disponible et déclencher la sauvegarde) : c'est fixé
+dans le sens constructeur. Si `ServicePortefeuille.getTotalEpargne()` avait dû appeler une
+méthode d'instance de `ServiceEpargne`, il aurait fallu que `ServicePortefeuille` détienne à son
+tour une référence sur `ServiceEpargne` — un cycle que `Main` n'aurait pas pu construire (chacun
+des deux aurait eu besoin de l'autre déjà construit). `CalculEpargne` n'est l'instance de rien :
+les deux services l'appellent comme ils appelleraient `Math.abs(...)`, sans qu'aucun des deux
+n'ait de référence sur l'autre.
+
+### Points à savoir défendre
+
+- **Le montant actuel d'un objectif est-il calculé à plusieurs endroits dans le code ?** Non,
+  une seule fois, dans `CalculEpargne.calculerMontantActuel`. `ServiceEpargne` et
+  `ServicePortefeuille` appellent tous les deux cette méthode plutôt que de reparcourir les
+  mouvements chacun de leur côté — avant cette étape, `getTotalEpargne()` dupliquait exactement
+  la boucle de `ServiceEpargne.getMontantActuel()`.
+- **Pourquoi le constructeur de `CalculEpargne` est-il privé ?** La classe n'a aucune raison
+  d'être instanciée : elle ne porte aucun état, seulement une méthode statique. Un constructeur
+  privé l'empêche explicitement, plutôt que de laisser un constructeur par défaut public sans
+  usage.
+
+### Pièges rencontrés
+
+Aucun.
+
+### Reste à faire
+
+Inchangé : `ServiceCategorie` (le reste), `ServiceStatistique`, puis la séparation de `Menu` en
+vues et contrôleurs.
