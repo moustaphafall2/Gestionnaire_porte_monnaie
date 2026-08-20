@@ -1,5 +1,6 @@
 package presentation;
 
+import controleur.ControleurCategorie;
 import controleur.ControleurEpargne;
 import controleur.ControleurPrincipal;
 import controleur.ControleurTransaction;
@@ -9,6 +10,7 @@ import modele.service.ServiceEpargne;
 import modele.service.ServicePortefeuille;
 import modele.service.ServiceTransaction;
 import persistance.GestionnaireFichier;
+import vue.VueCategorie;
 import vue.VueEpargne;
 import vue.VuePrincipale;
 import vue.VueTransaction;
@@ -20,9 +22,9 @@ import vue.VueTransaction;
     * services et contrôleurs sont reliées.
     *
     * Migration en cours vers l'architecture vue/contrôleur : ControleurPrincipal (menu
-    * principal, écran "voir le solde"), ControleurTransaction (dépense/revenu/historique) et
-    * ControleurEpargne (objectifs d'épargne) existent pour l'instant. Les services et
-    * contrôleurs des deux autres écrans seront reliés ici au fur et à mesure de leur migration.
+    * principal, écran "voir le solde"), ControleurTransaction (dépense/revenu/historique),
+    * ControleurEpargne (objectifs d'épargne) et ControleurCategorie (catégories) existent pour
+    * l'instant. Le contrôleur des statistiques sera relié ici à son tour.
 */
 public class Main {
     public static void main(String[] args) {
@@ -36,11 +38,13 @@ public class Main {
         VuePrincipale vuePrincipale = new VuePrincipale();
         VueTransaction vueTransaction = new VueTransaction();
         VueEpargne vueEpargne = new VueEpargne();
+        VueCategorie vueCategorie = new VueCategorie();
         ControleurTransaction controleurTransaction = new ControleurTransaction(vueTransaction, serviceTransaction,
                 serviceCategorie, servicePortefeuille);
         ControleurEpargne controleurEpargne = new ControleurEpargne(vueEpargne, serviceEpargne, servicePortefeuille);
+        ControleurCategorie controleurCategorie = new ControleurCategorie(vueCategorie, serviceCategorie, servicePortefeuille);
         ControleurPrincipal controleurPrincipal = new ControleurPrincipal(vuePrincipale, servicePortefeuille,
-                controleurTransaction, controleurEpargne);
+                controleurTransaction, controleurEpargne, controleurCategorie);
         controleurPrincipal.lancer();
     }
 }

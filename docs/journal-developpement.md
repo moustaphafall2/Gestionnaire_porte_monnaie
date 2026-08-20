@@ -1054,3 +1054,117 @@ Si `Epargne` reçoit un setter un jour, revoir l'exposition de `ServiceEpargne.g
 par exemple ne plus renvoyer l'`Epargne` elle-même aux contrôleurs, ou n'autoriser sa
 modification que via des méthodes dédiées de `ServiceEpargne`, sur le modèle de
 `ServicePortefeuille.getDonnees()`.
+
+## 2026-08-20 — Écran "Gérer mes catégories" : consultation, activation, désactivation
+
+### Ce qui a été écrit
+
+- **`ServiceCategorie`** : trois méthodes de plus — `getCategoriesActives()` (délègue à
+  `servicePortefeuille.getDonnees()`, pour l'affichage), `activerCategorie(Categorie)` et
+  `desactiverCategorie(Categorie)`. Ces deux dernières appellent la méthode structurelle
+  correspondante de `Portefeuille` (ajout/retrait dans un `Set`, inchangées), puis
+  `servicePortefeuille.sauvegarder()`.
+- **`VueCategorie`** (nouvelle classe, `vue`, hérite de `VueConsole`) : menu, ligne de résumé des
+  catégories actives (construite avec les libellés, séparés par des virgules, plutôt que le
+  `toString()` brut du `Set` que `Menu.java` affichait), sélection numérotée d'une catégorie
+  parmi une liste reçue (boucle tant que le numéro n'est pas valide), messages de statut.
+- **`ControleurCategorie`** (nouvelle classe, `controleur`) : `gererCategories()`, extraite de
+  `Menu.gererCategories`, avec la nouvelle tentative de sauvegarde en cas d'échec.
+- **`ControleurPrincipal`**/**`Main`** : option 6 branchée.
+
+### Choix de conception
+
+**`activerCategorie`/`desactiverCategorie` migrées vers `ServiceCategorie`, déclenchent
+maintenant `sauvegarder()` — elles ne le faisaient pas avant cette étape.** Un trou de
+sauvegarde resté ouvert depuis le début de la migration (signalé dans l'entrée du 2026-08-19
+"Correction... Portefeuille devient une entité pure" : ces deux méthodes étaient restées dans
+`Portefeuille` "pas demandées pour cette étape", et `Menu.gererCategories` ne sauvegardait
+jamais après les avoir appelées). Ce n'était pas visible en cours de session (les données
+restaient correctes en mémoire), mais activer ou désactiver une catégorie ne survivait pas à un
+redémarrage. Cette étape le referme : `ControleurCategorie` ne pouvait de toute façon plus
+appeler `Portefeuille.activerCategorie` directement (pas de référence sur `Portefeuille`), donc
+migrer ces deux méthodes vers `ServiceCategorie` était obligatoire pour brancher l'écran — et
+comme tous les autres services qui modifient le portefeuille, la sauvegarde va avec.
+
+**La sélection d'une catégorie boucle maintenant jusqu'à un numéro valide, alors que
+`Menu.gererCategories` abandonnait l'opération au premier numéro invalide
+(`if (numero < 1 || numero > ...) { ...; return; }`).** Écart assumé par rapport au code
+d'origine : les écrans déjà migrés (2 à 5) bouclent tous jusqu'à une saisie valide plutôt que
+d'abandonner l'opération entière. Réaligner cet écran sur le même comportement, plutôt que de
+reproduire l'ancien abandon immédiat, rend l'application cohérente d'un écran à l'autre — testé
+à la main (numéro invalide, puis numéro valide, sans devoir relancer l'écran).
+
+**Le résumé des catégories actives est reconstruit avec les libellés plutôt que d'afficher le
+`Set<Categorie>` brut.** `Menu.gererCategories` affichait
+`"Catégories actives : " + portefeuille.getCategoriesActives()`, ce qui imprime les noms de
+constantes Java (`[ALIMENTATION, SALAIRE]`) plutôt que les libellés utilisés partout ailleurs
+dans l'application (`Alimentation`). Reconstruit avec une boucle simple dans `VueCategorie`
+plutôt que de reproduire cet affichage brut, pour rester cohérent avec le reste de l'écran (menu
+numéroté avec les mêmes libellés).
+
+### Points à savoir défendre
+
+- **Où est vérifiée la règle "la désactivation n'affecte pas les transactions déjà
+  enregistrées" ?** Elle n'est vérifiée nulle part explicitement, parce qu'elle est garantie par
+  construction : `Portefeuille.desactiverCategorie` ne touche qu'à `categoriesActives` (un
+  `Set`), jamais à la liste `transactions`. Testé à la main : une transaction enregistrée avec
+  "Alimentation" garde cette catégorie après la désactivation d'"Alimentation".
+- **Pourquoi `ServiceCategorie.getCategoriesActives()` renvoie-t-elle directement le `Set` de
+  `Portefeuille`, sans le recopier ?** Parce que `Portefeuille.getCategoriesActives()` le renvoie
+  déjà via `Collections.unmodifiableSet(...)` : le recopier aurait été redondant, la protection
+  contre la modification existe déjà à la source.
+- **`ControleurCategorie` ne contient qu'un seul `try/catch(ErreurSauvegardeException)`, sans
+  `IllegalArgumentException`/`IllegalStateException` comme les autres contrôleurs — pourquoi ?**
+  Parce qu'aucune règle de gestion ne peut être violée sur cet écran : la catégorie proposée
+  vient toujours d'une liste déjà filtrée par le service (disponibles ou actives), jamais d'une
+  saisie libre. `Menu.gererCategories` d'origine n'avait pas non plus ce genre de `try/catch`,
+  pour la même raison.
+
+### Pièges rencontrés
+
+Aucun — testé à la main : activation, désactivation, numéro invalide (boucle jusqu'à un numéro
+valide), aucune catégorie disponible à activer (toutes déjà actives), aucune catégorie active à
+désactiver, et vérification que la désactivation ne modifie pas une transaction existante.
+
+### Reste à faire
+
+`VueStatistique`/`ControleurStatistique`, puis suppression de `Menu.java`. Le défaut de
+sauvegarde non atomique dans `GestionnaireFichier` reste non traité.
+
+## 2026-08-20 — Audit : tous les points de mutation d'entité déclenchent bien une sauvegarde
+
+### Choix de conception
+
+Demande explicite après la correction du trou sur les catégories : vérifier qu'aucun autre point
+de mutation ne s'en tire sans sauvegarde. Deux passes :
+
+1. `grep` sur tous les mutateurs d'entité (`setMontant`/`setCategorie`/`setDate`/`setDescription`
+   sur `Transaction`, `ajouterMouvement` sur `Epargne`, `ajouterTransaction`/`retirerTransaction`/
+   `ajouterObjectif`/`retirerObjectif`/`activerCategorie`/`desactiverCategorie` sur `Portefeuille`)
+   dans tout `src/`. Résultat : tous les appels viennent de `modele.service`, aucun depuis un
+   contrôleur. Les seuls autres appels sont dans `Menu.java`, qui n'est plus référencé nulle
+   part depuis que `Main` utilise `ControleurPrincipal`.
+2. Relecture des dix méthodes de service qui mutent réellement des données
+   (`ServiceTransaction.ajouterDepense/ajouterRevenu/modifierTransaction/supprimerTransaction`,
+   `ServiceEpargne.creerObjectif/contribuerObjectif/retirerObjectif/supprimerObjectif`,
+   `ServiceCategorie.activerCategorie/desactiverCategorie`) : chacune appelle
+   `servicePortefeuille.sauvegarder()` après sa mutation, et chacune valide avant de muter (pas
+   de mutation partielle possible en cas de refus métier).
+
+Aucun trou trouvé cette fois : celui sur les catégories, corrigé à l'étape précédente, était le
+dernier. Rien à corriger dans le code ; cette entrée trace la vérification elle-même.
+
+### Points à savoir défendre
+
+- **Comment être sûr qu'aucun contrôleur ne contourne un service pour muter une entité
+  directement ?** Deux garanties différentes selon l'entité : pour `Portefeuille`, le
+  compilateur l'empêche (`ServicePortefeuille.getDonnees()` à visibilité de paquet, entrée du
+  2026-08-19) ; pour `Transaction` et `Epargne`, accessibles depuis `controleur`, la garantie
+  est seulement observée dans le code actuel (aucun contrôleur n'appelle de setter), pas imposée
+  par le compilateur — c'est exactement le point soulevé dans l'entrée précédente sur
+  `getObjectif(id)`.
+
+### Reste à faire
+
+Inchangé : `VueStatistique`/`ControleurStatistique`, puis suppression de `Menu.java`. Le défaut
+de sauvegarde non atomique dans `GestionnaireFichier` reste non traité.

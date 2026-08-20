@@ -2,16 +2,18 @@ package modele.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
 
 /*
     * ServiceCategorie porte les règles de gestion des catégories actives : savoir si une
-    * catégorie est active, si un type de transaction a au moins une catégorie active, et
-    * quelles catégories restent disponibles à l'activation. `activerCategorie` et
-    * `desactiverCategorie` restent pour l'instant dans Portefeuille, en attendant de migrer
-    * ici à leur tour.
+    * catégorie est active, si un type de transaction a au moins une catégorie active, quelles
+    * catégories restent disponibles à l'activation, et l'activation/désactivation elles-mêmes.
+    * `Portefeuille.activerCategorie`/`desactiverCategorie` restent des méthodes structurelles
+    * (ajout/retrait dans un Set), mais déclencher la sauvegarde après coup est une
+    * responsabilité du service, jamais de l'entité.
 */
 public class ServiceCategorie {
     private ServicePortefeuille servicePortefeuille;
@@ -22,6 +24,24 @@ public class ServiceCategorie {
 
     public boolean estActive(Categorie categorie) {
         return servicePortefeuille.getDonnees().getCategoriesActives().contains(categorie);
+    }
+
+    // Catégories actuellement actives, utilisée par ControleurCategorie pour l'affichage.
+    public Set<Categorie> getCategoriesActives() {
+        return servicePortefeuille.getDonnees().getCategoriesActives();
+    }
+
+    public void activerCategorie(Categorie categorie) {
+        servicePortefeuille.getDonnees().activerCategorie(categorie);
+        servicePortefeuille.sauvegarder();
+    }
+
+    // Règle de gestion : la désactivation n'a aucun effet sur les transactions déjà
+    // enregistrées avec cette catégorie. Portefeuille.desactiverCategorie ne fait que la
+    // retirer de l'ensemble des catégories actives, jamais des transactions elles-mêmes.
+    public void desactiverCategorie(Categorie categorie) {
+        servicePortefeuille.getDonnees().desactiverCategorie(categorie);
+        servicePortefeuille.sauvegarder();
     }
 
     // Indique si au moins une catégorie active correspond à ce type. Utilisé par Menu pour
