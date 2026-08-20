@@ -1,4 +1,4 @@
-package persistance;
+package modele.persistance;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -17,9 +17,9 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 
-import metier.ErreurChargementException;
-import metier.ErreurSauvegardeException;
 import modele.entite.Portefeuille;
+import modele.exception.ErreurChargementException;
+import modele.exception.ErreurSauvegardeException;
 
 /*
     * La classe GestionnaireFichier est la seule classe autorisée à lire ou écrire sur le disque.
@@ -101,7 +101,7 @@ public class GestionnaireFichier {
         }
     }
 
-    public boolean fichierExiste() {
+    private boolean fichierExiste() {
         return Files.exists(Paths.get(cheminFichier));
     }
 }

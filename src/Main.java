@@ -1,18 +1,16 @@
-package presentation;
-
 import controleur.ControleurCategorie;
 import controleur.ControleurEpargne;
 import controleur.ControleurPrincipal;
 import controleur.ControleurStatistique;
 import controleur.ControleurTransaction;
-import metier.ErreurChargementException;
 import modele.entite.Portefeuille;
+import modele.exception.ErreurChargementException;
+import modele.persistance.GestionnaireFichier;
 import modele.service.ServiceCategorie;
 import modele.service.ServiceEpargne;
 import modele.service.ServicePortefeuille;
 import modele.service.ServiceStatistique;
 import modele.service.ServiceTransaction;
-import persistance.GestionnaireFichier;
 import vue.VueCategorie;
 import vue.VueEpargne;
 import vue.VuePrincipale;

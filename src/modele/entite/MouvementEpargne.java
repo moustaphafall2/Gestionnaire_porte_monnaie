@@ -62,8 +62,8 @@ public class MouvementEpargne {
 
     @Override
     public String toString() {
-        String signe = (sens == SensMouvement.CONTRIBUTION) ? "+" : "-";
-        String libelle = (sens == SensMouvement.CONTRIBUTION) ? "contribution" : "retrait";
-        return "[" + date.format(FORMAT_DATE) + "] " + signe + montant + " FCFA (" + libelle + ")";
+        String signe = (getSens() == SensMouvement.CONTRIBUTION) ? "+" : "-";
+        String libelle = (getSens() == SensMouvement.CONTRIBUTION) ? "contribution" : "retrait";
+        return "[" + getDate().format(FORMAT_DATE) + "] " + signe + getMontant() + " FCFA (" + libelle + ")";
     }
 }

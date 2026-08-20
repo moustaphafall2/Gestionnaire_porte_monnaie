@@ -1,4 +1,4 @@
-package metier;
+package modele.exception;
 
 /*
     * Levée quand la lecture du fichier de sauvegarde échoue pour une raison que

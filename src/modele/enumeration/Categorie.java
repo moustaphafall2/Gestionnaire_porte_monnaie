@@ -1,12 +1,10 @@
 package modele.enumeration;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /*
     * L'énumération Categorie représente les différentes catégories de transactions financières.
     * Chaque catégorie est associée à un type de transaction (dépense ou revenu) et possède un libellé descriptif.
-    * L'énumération fournit des méthodes pour accéder aux informations des catégories et pour filtrer les catégories par type de transaction.
+    * Le filtrage des catégories par type (actives ou non) est une règle de gestion : il vit dans
+    * ServiceCategorie, pas ici.
 */
 public enum Categorie {
     // Ici, chaque ligne crée une "instance" de Categorie,
@@ -42,19 +40,4 @@ public enum Categorie {
     public TypeTransaction getType() {
         return type;
     }
-
-    // Méthode pour obtenir les catégories de l'enum 
-    // qui correspondent au type reçu en paramètre.
-    public static List<Categorie> parType(TypeTransaction type) {
-        
-        ArrayList<Categorie> categorieDispoType = new ArrayList<>();
-
-        for (Categorie c : Categorie.values()) {
-            if (c.getType() == type) {
-                categorieDispoType.add(c);
-            }
-        }
-        return categorieDispoType;
-    }
-    
 }

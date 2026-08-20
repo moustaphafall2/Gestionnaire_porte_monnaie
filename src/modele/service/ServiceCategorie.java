@@ -22,7 +22,7 @@ public class ServiceCategorie {
         this.servicePortefeuille = servicePortefeuille;
     }
 
-    public boolean estActive(Categorie categorie) {
+    boolean estActive(Categorie categorie) {
         return servicePortefeuille.getDonnees().getCategoriesActives().contains(categorie);
     }
 
@@ -44,8 +44,9 @@ public class ServiceCategorie {
         servicePortefeuille.sauvegarder();
     }
 
-    // Indique si au moins une catégorie active correspond à ce type. Utilisé par Menu pour
-    // vérifier la précondition avant de proposer d'ajouter une dépense/un revenu.
+    // Indique si au moins une catégorie active correspond à ce type. Utilisé par
+    // ControleurTransaction pour vérifier la précondition avant de proposer d'ajouter une
+    // dépense/un revenu.
     public boolean aCategorieActiveDeType(TypeTransaction type) {
         for (Categorie categorie : servicePortefeuille.getDonnees().getCategoriesActives()) {
             if (categorie.getType() == type) {

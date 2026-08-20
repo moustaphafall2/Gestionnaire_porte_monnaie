@@ -1,6 +1,6 @@
 package controleur;
 
-import metier.ErreurSauvegardeException;
+import modele.exception.ErreurSauvegardeException;
 import modele.service.ServicePortefeuille;
 import vue.VuePrincipale;
 
@@ -8,8 +8,8 @@ import vue.VuePrincipale;
     * ControleurPrincipal tient la boucle du menu principal : il lit le choix de l'utilisateur
     * et aiguille vers l'écran correspondant. Il n'affiche jamais rien lui-même — chaque
     * affichage passe par VuePrincipale, à qui il transmet les valeurs obtenues des services.
-    * Tous les écrans délèguent maintenant directement à leur contrôleur dédié : la migration
-    * amorcée avec ControleurTransaction est terminée pour les sept écrans du menu principal.
+    * Chaque écran (1 à 7) délègue à son propre contrôleur, sauf l'écran "voir le solde",
+    * traité directement ici puisqu'il ne demande qu'un appel à ServicePortefeuille.
 */
 public class ControleurPrincipal {
     private VuePrincipale vuePrincipale;

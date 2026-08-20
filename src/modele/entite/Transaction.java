@@ -134,8 +134,8 @@ public class Transaction {
     // sous forme de chaîne de caractères.
     @Override
     public String toString() {
-        String descriptionAffichee = (description == null || description.isBlank()) ? "(sans description)" : description;
-        return date + " - Transaction " + id + " " + categorie.getLibelle()
-                + " - " + descriptionAffichee + ", montant = " + montant + ", type = " + type;
+        String descriptionAffichee = (getDescription() == null || getDescription().isBlank()) ? "(sans description)" : getDescription();
+        return getDate() + " - Transaction " + getId() + " " + getCategorie().getLibelle()
+                + " - " + descriptionAffichee + ", montant = " + getMontant() + ", type = " + getType();
     }
 }

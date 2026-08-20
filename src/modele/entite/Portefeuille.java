@@ -100,8 +100,8 @@ public class Portefeuille {
         return Collections.unmodifiableList(objectifs);
     }
 
-    // Recherche publique d'un objectif par id, utilisée par Menu pour afficher un
-    // récapitulatif (nom, progression...) avant de demander confirmation à l'utilisateur.
+    // Recherche publique d'un objectif par id, utilisée par ServiceEpargne pour retrouver
+    // l'objectif choisi avant de contribuer, retirer, supprimer ou en afficher le détail.
     public Epargne getObjectif(int idObjectif) {
         return trouverObjectif(idObjectif);
     }

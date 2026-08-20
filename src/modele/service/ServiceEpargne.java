@@ -43,14 +43,14 @@ public class ServiceEpargne {
     }
 
     // Indique si une contribution de ce montant ferait dépasser le montant cible. Dépasser la
-    // cible reste autorisé (règle de gestion) : c'est à l'appelant (Menu) de décider s'il
-    // signale ce dépassement avant de confirmer l'opération.
+    // cible reste autorisé (règle de gestion) : c'est à l'appelant (ControleurEpargne) de
+    // décider s'il signale ce dépassement avant de confirmer l'opération.
     public boolean depasseraCible(Epargne objectif, double montant) {
         return getMontantActuel(objectif) + montant > objectif.getMontantCible();
     }
 
     // Condition nécessaire à la suppression de l'objectif
-    public boolean estVide(Epargne objectif) {
+    private boolean estVide(Epargne objectif) {
         return Math.abs(getMontantActuel(objectif)) < EPSILON;
     }
 

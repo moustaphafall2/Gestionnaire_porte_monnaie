@@ -21,7 +21,7 @@ public class CalculEpargne {
 
     // Montant actuellement épargné sur cet objectif. Règle de gestion : jamais stocké, toujours
     // recalculé à partir des mouvements (somme des contributions moins somme des retraits).
-    public static double calculerMontantActuel(Epargne objectif) {
+    static double calculerMontantActuel(Epargne objectif) {
         double sommeContributions = 0;
         double sommeRetraits = 0;
 

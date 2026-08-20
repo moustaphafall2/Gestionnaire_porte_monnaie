@@ -4,7 +4,7 @@ import modele.entite.Epargne;
 import modele.entite.Portefeuille;
 import modele.entite.Transaction;
 import modele.enumeration.TypeTransaction;
-import persistance.GestionnaireFichier;
+import modele.persistance.GestionnaireFichier;
 
 /*
     * ServicePortefeuille a trois responsabilités, et pas une de plus : détenir le

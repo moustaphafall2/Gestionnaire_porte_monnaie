@@ -16,19 +16,28 @@ ni base de données — les données sont sauvegardées localement dans un fichi
 
 ## Architecture
 
-Le projet est organisé en trois couches, avec des dépendances qui vont toujours vers le bas :
+Le projet suit une architecture MVC stricte, avec un contrôleur et une vue par écran :
 
 ```
 src/
-├── presentation/   Main, Menu — affichage console et saisie utilisateur
-├── metier/         Portefeuille, Transaction, Epargne, MouvementEpargne,
-│                    Categorie, TypeTransaction, SensMouvement, ErreurSauvegardeException
-└── persistance/     GestionnaireFichier — seule classe autorisée à lire/écrire sur le disque
+├── Main.java        Point d'entrée : construit services, vues et contrôleurs, démarre la boucle
+├── modele/
+│   ├── entite/       Portefeuille, Transaction, Epargne, MouvementEpargne — structure seulement
+│   ├── enumeration/  Categorie, TypeTransaction, SensMouvement
+│   ├── service/      Toute la logique métier et les calculs (ServiceTransaction, ServiceEpargne,
+│   │                  ServiceCategorie, ServiceStatistique, ServicePortefeuille, CalculEpargne)
+│   ├── persistance/  GestionnaireFichier — seule classe autorisée à lire/écrire sur le disque
+│   └── exception/    ErreurSauvegardeException, ErreurChargementException
+├── vue/              Affichage console et saisie utilisateur, une classe par écran
+└── controleur/       Enchaîne saisie (vue) → règle métier (service) → affichage (vue)
 ```
 
-La couche métier ne connaît rien de la console ni du fichier de sauvegarde : elle expose des
-méthodes métier pures, appelées par `Menu`. La sauvegarde est déclenchée par `Portefeuille`
-lui-même après chaque opération validée, jamais par `Menu`.
+Les entités ne portent que leur structure (attributs, constructeur, getters) : aucun calcul,
+aucune règle qui dépend d'un autre objet. Les vues n'importent jamais `modele.service` — elles
+affichent et lisent, sans déclencher aucun traitement. Les contrôleurs n'affichent jamais rien
+directement et ne contiennent aucun calcul métier : ils appellent un service et transmettent le
+résultat à la vue. La sauvegarde est déclenchée par les services (`ServicePortefeuille.sauvegarder()`),
+jamais par une entité ni par un contrôleur directement.
 
 ## Dépendances
 
@@ -41,7 +50,7 @@ lui-même après chaque opération validée, jamais par `Menu`.
 Depuis la racine du projet :
 
 ```bash
-javac -cp lib/gson-2.13.1.jar -d bin $(find src -name "*.java") && java -cp bin:lib/gson-2.13.1.jar presentation.Main
+javac -cp lib/gson-2.13.1.jar -d bin $(find src -name "*.java") && java -cp bin:lib/gson-2.13.1.jar Main
 ```
 
 La première partie compile les sources vers `bin/` en incluant Gson dans le classpath ; la
@@ -55,9 +64,12 @@ VS Code : `.vscode/settings.json` déclare déjà `src/` comme dossier source et
 Les données sont sauvegardées dans `portefeuille.json`, créé automatiquement à la racine du
 projet (ou du dossier depuis lequel le programme est lancé) dès la première opération. Ce
 fichier n'est pas versionné (voir `.gitignore`) : ce sont des données utilisateur, pas du code
-source.
+source. L'écriture est atomique (fichier temporaire puis renommage) : une coupure en pleine
+sauvegarde ne peut pas corrompre le fichier existant.
 
 ## Documentation
 
 Le dossier `docs/` contient la modélisation complète du projet (contexte, cas d'utilisation,
 diagrammes, règles de gestion) et la spécification détaillée de chaque classe.
+`docs/journal-developpement.md` retrace, étape par étape, les choix de conception faits pendant
+le développement — en particulier la migration vers l'architecture MVC actuelle.

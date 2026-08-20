@@ -2,8 +2,8 @@ package controleur;
 
 import java.util.List;
 
-import metier.ErreurSauvegardeException;
 import modele.enumeration.Categorie;
+import modele.exception.ErreurSauvegardeException;
 import modele.service.ServiceCategorie;
 import modele.service.ServicePortefeuille;
 import vue.VueCategorie;
