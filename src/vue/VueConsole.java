@@ -20,11 +20,11 @@ public class VueConsole {
 
     protected static final DateTimeFormatter FORMAT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    private Scanner scanner;
-
-    public VueConsole() {
-        this.scanner = new Scanner(System.in);
-    }
+    // Statique et partagé par toutes les vues (VuePrincipale, VueTransaction...), pas un
+    // attribut par instance : System.in est un flux unique pour tout le programme, et deux
+    // Scanner ouverts dessus se volent des lignes l'un l'autre (chacun bufferise de son côté).
+    // Un seul Scanner, commun à toutes les vues qui héritent de VueConsole, évite le problème.
+    private static Scanner scanner = new Scanner(System.in);
 
     // Affiche un message d'information à l'utilisateur.
     public void afficherMessage(String message) {
@@ -105,5 +105,24 @@ public class VueConsole {
             }
             afficherMessage("Réponse attendue : o ou n.");
         }
+    }
+
+    // Affiche l'échec de sauvegarde puis demande si l'utilisateur veut réessayer l'écriture sur
+    // le disque. Générique et réutilisable par tout écran qui modifie réellement les données,
+    // pas seulement les transactions : c'est pour ça qu'elle vit ici plutôt que dans une vue
+    // d'écran particulière.
+    public boolean demanderNouvelleTentativeSauvegarde(String messageErreur) {
+        afficherMessage("Attention : " + messageErreur);
+        return confirmer("Réessayer la sauvegarde ?");
+    }
+
+    public void afficherSauvegardeReussie() {
+        afficherMessage("Sauvegarde réussie.");
+    }
+
+    // Affichée quand l'utilisateur renonce à réessayer : l'opération a bien eu lieu en mémoire,
+    // seule l'écriture sur le disque a échoué (voir ErreurSauvegardeException).
+    public void afficherSauvegardeAbandonnee() {
+        afficherMessage("L'opération a bien été effectuée en mémoire, mais pas encore enregistrée sur le disque.");
     }
 }

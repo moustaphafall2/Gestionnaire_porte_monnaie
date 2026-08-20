@@ -45,4 +45,17 @@ public class ServiceCategorie {
         }
         return disponibles;
     }
+
+    // Catégories actives qui correspondent à ce type. Utilisée par ControleurTransaction pour
+    // proposer, à l'ajout d'une dépense ou d'un revenu, uniquement les catégories du bon type
+    // (règle de gestion "catégorie cohérente").
+    public List<Categorie> getCategoriesActivesDeType(TypeTransaction type) {
+        List<Categorie> resultat = new ArrayList<>();
+        for (Categorie categorie : servicePortefeuille.getDonnees().getCategoriesActives()) {
+            if (categorie.getType() == type) {
+                resultat.add(categorie);
+            }
+        }
+        return resultat;
+    }
 }

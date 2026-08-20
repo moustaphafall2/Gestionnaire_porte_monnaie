@@ -661,3 +661,113 @@ Inchangé : `VueTransaction`/`ControleurTransaction`, `VueEpargne`/`ControleurEp
 `VueCategorie`/`ControleurCategorie`, `VueStatistique`/`ControleurStatistique`, chacun câblé un
 par un, en appliquant dès l'écriture la règle "aucune chaîne dans le contrôleur" ; puis
 suppression de `Menu.java`.
+
+## 2026-08-20 — `VueTransaction` et `ControleurTransaction` : écrans "Ajouter une dépense"/"Ajouter un revenu"
+
+### Ce qui a été écrit
+
+- **`VueTransaction`** (nouvelle classe, `vue`, hérite de `VueConsole`) : affichage et saisies
+  propres à ces deux écrans — `afficherAucuneCategorieActive(TypeTransaction)`,
+  `demanderCategorie(List<Categorie>)` (numérote, lit, boucle tant que le numéro est hors
+  limites), `demanderDescription(String)`, `afficherRecapitulatif(...)`,
+  `afficherAvertissementSoldeNegatif(double)`, `afficherOperationAnnulee()`,
+  `afficherDepenseEnregistree()`, `afficherRevenuEnregistre()`.
+- **`ControleurTransaction`** (nouvelle classe, `controleur`) : `gererAjouterDepense()` et
+  `gererAjouterRevenu()`, extraites de `Menu.gererAjouterDepense`/`gererAjouterRevenu`. Dépend de
+  `ServiceTransaction` (enregistrement), `ServiceCategorie` (catégorie active) et
+  `ServicePortefeuille` (solde après dépense, et nouvelle tentative de sauvegarde, voir
+  plus bas).
+- **`ServiceCategorie`** : une méthode de plus, `getCategoriesActivesDeType(TypeTransaction)` —
+  les catégories actives d'un type donné, nécessaire à `ControleurTransaction` pour proposer le
+  bon choix (règle "catégorie cohérente"). Même logique de naissance incrémentale que les
+  services précédents : ajoutée parce que cet écran en avait besoin, pas avant.
+- **`VueConsole`** : trois méthodes génériques de plus —
+  `demanderNouvelleTentativeSauvegarde(String)`, `afficherSauvegardeReussie()`,
+  `afficherSauvegardeAbandonnee()`. Placées ici plutôt que dans `VueTransaction` : le mécanisme
+  de nouvelle tentative après un échec de sauvegarde ne concerne pas que les transactions, tous
+  les écrans qui modifient réellement les données (épargne, catégories) en auront besoin plus
+  tard.
+- **`ControleurPrincipal`** : reçoit `ControleurTransaction` par le constructeur ; les cases 2 et
+  3 du switch délèguent à `controleurTransaction.gererAjouterDepense()`/`gererAjouterRevenu()`
+  au lieu d'afficher "en cours de migration". Commentaire d'en-tête mis à jour en conséquence.
+- **`Main`** : construit `ServiceCategorie`, `ServiceTransaction`, `VueTransaction`,
+  `ControleurTransaction`, et les relie à `ControleurPrincipal`.
+
+### Choix de conception
+
+**La question posée avant de coder : que faire d'un échec de sauvegarde sur un écran qui modifie
+réellement les données ?** Décision prise avec l'utilisateur du projet : proposer une nouvelle
+tentative, sans jamais bloquer l'utilisateur s'il refuse. Concrètement, `ServiceTransaction`
+applique déjà l'opération en mémoire *avant* d'appeler `servicePortefeuille.sauvegarder()` — si
+cet appel échoue, la transaction existe déjà dans la liste du `Portefeuille`. `sauvegarder()` est
+donc une opération **idempotente** : la rappeler ne fait que réécrire l'état courant sur le
+disque, sans rejouer l'ajout. `ControleurTransaction.confirmerNouvelleSauvegarde(...)` boucle
+sur `vueTransaction.demanderNouvelleTentativeSauvegarde(...)` et rappelle directement
+`servicePortefeuille.sauvegarder()` (jamais `ajouterDepense`/`ajouterRevenu`, ce qui créerait un
+doublon) tant que l'utilisateur accepte. S'il refuse, `afficherSauvegardeAbandonnee()` s'affiche
+et l'application continue normalement — pas de blocage, la décision explicitement écartée
+(risque de boucle sans issue si le disque reste inaccessible durablement, dans une appli console
+sans thread pour faire autre chose en attendant).
+
+**Pourquoi `demanderNouvelleTentativeSauvegarde`/`afficherSauvegardeReussie`/`afficherSauvegardeAbandonnee`
+vivent dans `VueConsole` et pas dans `VueTransaction`.** Ce mécanisme n'a rien de spécifique aux
+transactions : `ControleurEpargne` et `ControleurCategorie` en auront besoin exactement de la
+même façon dès qu'ils modifieront réellement des données. `VueConsole` est justement l'endroit
+"briques réutilisées par toutes les vues" (cf. son propre commentaire de classe) — l'y placer
+maintenant évite de dupliquer ces trois méthodes dans chaque vue d'écran à venir.
+
+**Pourquoi le contrôleur peut appeler `vueTransaction.confirmer("Confirmer l'enregistrement de
+cette dépense ?")` avec un littéral, sans violer la règle "aucune chaîne dans le contrôleur" ?**
+Cette règle (posée dans l'entrée du 2026-08-19) vise les méthodes d'affichage de sortie
+(`afficherXxx`), pas les méthodes de saisie génériques de `VueConsole`
+(`lireEntier`/`lireMontant`/`lireDate`/`confirmer`), qui prennent un texte de prompt en
+paramètre par construction — exactement comme `ControleurPrincipal` le fait déjà avec
+`vuePrincipale.lireEntier("Votre choix : ")`. Étendre la règle à ces prompts aurait obligé à
+créer une méthode de vue dédiée pour chaque question posée à l'utilisateur, ce qui n'apporte
+rien : le texte n'est ni calculé ni réutilisé ailleurs, juste un prompt d'entrée comme un autre.
+
+**Pourquoi `gererAjouterDepense` et `gererAjouterRevenu` restent deux méthodes séparées, sans
+extraire un helper commun malgré leur ressemblance.** C'est déjà la structure de `Menu.java` (qui
+ne les fusionnait pas). Les deux écrans se distinguent par plus que leur verbe (l'avertissement
+de solde négatif n'existe que pour la dépense, le service appelé diffère) ; un helper générique
+aurait dû prendre un paramètre pour ces différences, ce qui aurait été moins lisible qu'écrire
+les deux méthodes en clair, ligne par ligne — le critère "je dois pouvoir défendre chaque ligne"
+prime ici sur la déduplication.
+
+### Points à savoir défendre
+
+- **Où est implémentée la règle "dépense > solde disponible autorisée avec avertissement" ?**
+  Dans `ControleurTransaction.gererAjouterDepense()` (`if (soldeApres < 0)`), pas dans la vue :
+  le tableau des règles de gestion du `CLAUDE.md` place cette règle dans "Contrôleur". La vue ne
+  fait qu'afficher un montant qu'on lui donne, elle ne décide jamais si l'avertissement doit
+  sortir.
+- **Que se passe-t-il si la sauvegarde échoue deux fois de suite ?** La boucle continue de
+  proposer une nouvelle tentative tant que l'utilisateur répond "oui" : chaque échec remplace le
+  message affiché par celui de la nouvelle exception, sans jamais perdre la transaction déjà en
+  mémoire.
+- **Pourquoi `servicePortefeuille.sauvegarder()` est-il rappelable sans risque, contrairement à
+  `serviceTransaction.ajouterDepense(...)` ?** Parce que `sauvegarder()` ne fait qu'écrire l'état
+  courant du `Portefeuille` sur le disque (aucune modification de données), alors que
+  `ajouterDepense` créerait une deuxième transaction identique si on la rappelait.
+
+### Pièges rencontrés
+
+**Deux `Scanner(System.in)` en même temps.** `VueConsole` créait un `new Scanner(System.in)` par
+instance, dans son constructeur — sans conséquence tant qu'une seule vue existait
+(`VuePrincipale`). Avec `VueTransaction` comme deuxième vue instanciée dans `Main`, deux `Scanner`
+se sont retrouvés ouverts sur la même entrée standard. Repéré concrètement en testant l'écran :
+`demanderCategorie` levait `NoSuchElementException: No line found` alors que l'entrée fournie
+contenait bien la ligne attendue — un `Scanner` avait bufferisé par avance des lignes destinées à
+l'autre. Corrigé en rendant le champ `scanner` de `VueConsole` **statique**, partagé par toutes
+les vues qui en héritent, puisque `System.in` est un flux unique pour tout le programme. Ce
+correctif profite à toutes les vues à venir (`VueEpargne`, `VueCategorie`,
+`VueStatistique`) sans qu'elles aient à s'en soucier.
+
+### Reste à faire
+
+`VueEpargne`/`ControleurEpargne`, `VueCategorie`/`ControleurCategorie`,
+`VueStatistique`/`ControleurStatistique`, chacun câblé un par un ; puis suppression de
+`Menu.java`. Signalé mais non traité : `GestionnaireFichier.sauvegarder()` n'écrit pas de façon
+atomique (pas de fichier `.tmp` puis renommage), alors que le `CLAUDE.md` l'exige — une coupure
+en pleine écriture pourrait corrompre `portefeuille.json`. Hors périmètre de cette étape, à
+traiter séparément.
