@@ -1,6 +1,7 @@
 package modele.service;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import modele.entite.Epargne;
 import modele.entite.MouvementEpargne;
@@ -57,6 +58,20 @@ public class ServiceEpargne {
         return getMontantActuel(objectif) >= objectif.getMontantCible();
     }
 
+    // Liste complète des objectifs, utilisée par ControleurEpargne pour les afficher (avec leur
+    // progression, calculée à part par getMontantActuel/getPourcentageAtteint) avant de demander
+    // un identifiant à l'utilisateur.
+    public List<Epargne> getObjectifs() {
+        return servicePortefeuille.getDonnees().getObjectifs();
+    }
+
+    // Recherche publique d'un objectif par id, utilisée par ControleurEpargne pour récupérer
+    // l'objectif choisi (nom, mouvements...) avant de contribuer, retirer ou en afficher le
+    // détail.
+    public Epargne getObjectif(int idObjectif) {
+        return servicePortefeuille.getDonnees().getObjectif(idObjectif);
+    }
+
     // Crée un nouvel objectif et l'ajoute au portefeuille. Le compteur d'identifiants reste
     // dans Portefeuille (donc sauvegardé), pour la même raison que genererIdTransaction() :
     // repartir de zéro au redémarrage créerait des doublons.
@@ -73,8 +88,10 @@ public class ServiceEpargne {
     // ne connaît pas le solde disponible du portefeuille. Refusé à cause de l'état actuel
     // du portefeuille (pas d'une donnée invalide en soi) : IllegalStateException.
     public void contribuerObjectif(int idObjectif, double montant, LocalDate date) {
-        if (montant > servicePortefeuille.getSoldeDisponible()) {
-            throw new IllegalStateException("Le montant de la contribution dépasse le solde disponible.");
+        double soldeDisponible = servicePortefeuille.getSoldeDisponible();
+        if (montant > soldeDisponible) {
+            throw new IllegalStateException("Le montant de la contribution dépasse le solde disponible ("
+                    + soldeDisponible + " FCFA).");
         }
 
         Epargne objectif = servicePortefeuille.getDonnees().getObjectif(idObjectif);

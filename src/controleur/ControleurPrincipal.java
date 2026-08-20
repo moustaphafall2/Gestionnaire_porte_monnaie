@@ -8,21 +8,23 @@ import vue.VuePrincipale;
     * ControleurPrincipal tient la boucle du menu principal : il lit le choix de l'utilisateur
     * et aiguille vers l'écran correspondant. Il n'affiche jamais rien lui-même — chaque
     * affichage passe par VuePrincipale, à qui il transmet les valeurs obtenues des services.
-    * Les écrans déjà migrés (solde, ajout d'une dépense/d'un revenu, historique) délèguent
-    * directement à leur contrôleur dédié (ex. ControleurTransaction) ; les trois autres écrans
-    * (épargne, catégories, statistiques) restent affichés comme "en cours de migration" en
+    * Les écrans déjà migrés (solde, ajout d'une dépense/d'un revenu, historique, épargne)
+    * délèguent directement à leur contrôleur dédié (ex. ControleurTransaction) ; les deux
+    * autres écrans (catégories, statistiques) restent affichés comme "en cours de migration" en
     * attendant leur tour.
 */
 public class ControleurPrincipal {
     private VuePrincipale vuePrincipale;
     private ServicePortefeuille servicePortefeuille;
     private ControleurTransaction controleurTransaction;
+    private ControleurEpargne controleurEpargne;
 
     public ControleurPrincipal(VuePrincipale vuePrincipale, ServicePortefeuille servicePortefeuille,
-            ControleurTransaction controleurTransaction) {
+            ControleurTransaction controleurTransaction, ControleurEpargne controleurEpargne) {
         this.vuePrincipale = vuePrincipale;
         this.servicePortefeuille = servicePortefeuille;
         this.controleurTransaction = controleurTransaction;
+        this.controleurEpargne = controleurEpargne;
     }
 
     // Boucle principale : affiche le menu, lit le choix, exécute l'action correspondante,
@@ -45,7 +47,8 @@ public class ControleurPrincipal {
                     case 2 -> controleurTransaction.gererAjouterDepense();
                     case 3 -> controleurTransaction.gererAjouterRevenu();
                     case 4 -> controleurTransaction.gererHistorique();
-                    case 5, 6, 7 -> vuePrincipale.afficherFonctionnaliteIndisponible();
+                    case 5 -> controleurEpargne.gererObjectifsEpargne();
+                    case 6, 7 -> vuePrincipale.afficherFonctionnaliteIndisponible();
                     case 8 -> continuer = false;
                     default -> vuePrincipale.afficherChoixInvalide();
                 }

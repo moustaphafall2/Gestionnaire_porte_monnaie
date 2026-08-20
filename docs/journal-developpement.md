@@ -913,3 +913,144 @@ clair, retour immédiat, pas de blocage).
 Inchangé : `VueEpargne`/`ControleurEpargne`, `VueCategorie`/`ControleurCategorie`,
 `VueStatistique`/`ControleurStatistique`, puis suppression de `Menu.java`. Le défaut de
 sauvegarde non atomique dans `GestionnaireFichier` reste non traité.
+
+## 2026-08-20 — Écran "Gérer mes objectifs d'épargne" : création, contribution, retrait, consultation, suppression
+
+### Ce qui a été écrit
+
+- **`ServiceEpargne`** : deux méthodes de plus, `getObjectifs()` et `getObjectif(int idObjectif)`
+  (délèguent toutes les deux à `servicePortefeuille.getDonnees()`) — nécessaires pour que
+  `ControleurEpargne` puisse afficher la liste des objectifs et récupérer celui choisi par
+  l'utilisateur, sans jamais détenir `Portefeuille` lui-même. Message de
+  `contribuerObjectif` corrigé : il rappelle maintenant le solde disponible
+  (`"... (150000.0 FCFA)."`), comme demandé — il ne le faisait pas encore, seul le montant
+  restant était déjà rappelé côté `supprimerObjectif`.
+- **`VueEpargne`** (nouvelle classe, `vue`, hérite de `VueConsole`) : affichage et saisies
+  propres à cet écran — menu, ligne de progression d'un objectif (montant actuel et pourcentage
+  reçus en paramètres, jamais recalculés dans la vue), détail des mouvements, récapitulatifs de
+  création/contribution/retrait, `lireDateLimite(...)` (variante facultative de `lireDate()`,
+  future autorisée), messages de confirmation.
+- **`ControleurEpargne`** (nouvelle classe, `controleur`) : `gererObjectifsEpargne()` aiguille
+  vers cinq méthodes privées (`gererCreationObjectif`, `gererContribution`, `gererRetrait`,
+  `gererConsultationObjectifs`, `gererSuppressionObjectif`), extraites de
+  `Menu.gererObjectifsEpargne`. Dépend de `ServiceEpargne` et `ServicePortefeuille` (solde,
+  sauvegarde).
+- **`VueConsole`** : `afficherOperationAnnulee()` déplacée depuis `VueTransaction` — devenue
+  générique dès qu'un deuxième écran (épargne) en a eu besoin à l'identique.
+- **`ControleurPrincipal`**/**`Main`** : option 5 branchée sur `ControleurEpargne`.
+
+### Choix de conception
+
+**`ServiceEpargne.getObjectifs()`/`getObjectif(id)` : pourquoi les ajouter maintenant plutôt que
+de continuer avec `ServicePortefeuille.getDonnees()` directement ?** Cette dernière est à
+visibilité de paquet, réservée à `modele.service` : `ControleurEpargne`, dans `controleur`, ne
+peut pas y accéder (ce que la migration précédente avait explicitement verrouillé). Comme pour
+`ServiceTransaction.getTransaction(id)` (entrée précédente), le contrôleur a besoin d'un point
+d'accès public porté par le service du domaine concerné.
+
+**Le solde disponible, dans le message de refus d'une contribution, corrigé pour être rappelé.**
+Demandé explicitement pour cet écran. Avant cette étape, seul `supprimerObjectif` rappelait une
+valeur dans son message d'erreur (le montant restant) ; `contribuerObjectif` se contentait de
+"dépasse le solde disponible.", sans le chiffre. Corrigé pour rester cohérent avec la règle du
+`CLAUDE.md` et avec le style déjà en place dans `supprimerObjectif` (concaténation brute, pas de
+`String.format`, comme la ligne voisine déjà écrite pour l'objectif non vide).
+
+**`afficherListeObjectifs()` (dans `ControleurEpargne`) boucle sur les objectifs et appelle
+`vueEpargne.afficherObjectif(objectif, montantActuel, pourcentage)` un par un, plutôt que de
+passer toute la liste à la vue comme `VueTransaction.afficherTransactions(List)` le fait pour les
+transactions.** Différence assumée : une transaction s'affiche avec son propre `toString()`, sans
+donnée externe. Un objectif, lui, a besoin de deux valeurs calculées par `ServiceEpargne`
+(montant actuel, pourcentage) que la vue ne peut pas calculer elle-même (elle n'importe jamais
+`modele.service`). Le contrôleur doit donc aller chercher ces deux valeurs avant de les
+transmettre — la boucle vit côté contrôleur pour cette raison précise, pas par choix de style.
+
+**`afficherOperationAnnulee()` déplacée de `VueTransaction` vers `VueConsole`.** Elle existait
+déjà mot pour mot dans `VueTransaction` ; `ControleurEpargne` en avait besoin à l'identique pour
+les quatre opérations de cet écran qui demandent confirmation. Plutôt que de la dupliquer dans
+`VueEpargne`, elle rejoint `demanderNouvelleTentativeSauvegarde`/`afficherSauvegardeReussie`/
+`afficherSauvegardeAbandonnee` (entrée du 2026-08-20 sur les écrans 2/3) dans `VueConsole` : un
+comportement identique nécessaire à deux écrans devient une brique commune. Aucun changement de
+comportement sur les écrans déjà migrés (2, 3, 4) : `VueTransaction` en hérite désormais au lieu
+de la définir elle-même.
+
+**Deux méthodes de récapitulatif distinctes (`afficherRecapitulatifContribution`/
+`afficherRecapitulatifRetrait`) plutôt qu'une seule avec un mot ("vers"/"de") passé en
+paramètre.** Un paramètre du genre `preposition` aurait fait construire une partie du texte
+affiché depuis le contrôleur — exactement ce que la règle "aucune chaîne destinée à l'utilisateur
+dans le contrôleur" interdit. Deux méthodes, chacune avec son texte fixe, gardent toute la phrase
+côté vue.
+
+### Points à savoir défendre
+
+- **Où est vérifiée la règle "contribution > solde disponible" ?** Dans
+  `ServiceEpargne.contribuerObjectif`, pas dans le contrôleur : `ControleurEpargne` ne fait que
+  transmettre montant et id, c'est le service qui compare au solde (obtenu lui-même auprès de
+  `ServicePortefeuille`) et lève l'exception. Le contrôleur, lui, se contente d'afficher le solde
+  actuel avant la saisie (information, pas une vérification) et de signaler un dépassement de
+  cible (`serviceEpargne.depasseraCible(...)`, un appel de service, pas un calcul).
+- **Pourquoi `gererConsultationObjectifs` peut-elle afficher "Aucun mouvement pour le moment"
+  après avoir déjà affiché la liste des objectifs ?** Deux vérifications différentes : la liste
+  des objectifs peut être non vide (on peut choisir un id) alors que l'objectif choisi n'a encore
+  aucun mouvement (montant actuel à 0, cas d'un objectif tout juste créé) — les deux messages
+  vides (`afficherAucunObjectif`, dans `afficherMouvements`) répondent chacun à leur propre
+  liste.
+- **La suppression d'un objectif peut-elle créer un doublon en cas de nouvelle tentative de
+  sauvegarde ?** Non, même raisonnement que pour les transactions : `confirmerNouvelleSauvegarde`
+  ne rappelle jamais `serviceEpargne.supprimerObjectif(id)`, seulement
+  `servicePortefeuille.sauvegarder()` — l'objectif est déjà retiré de la liste en mémoire au
+  moment où l'exception de sauvegarde est levée.
+
+### Pièges rencontrés
+
+Aucun — testé à la main : création, contribution (dans la limite du solde, avec dépassement de
+cible signalé puis confirmé), contribution refusée (solde insuffisant, message avec le solde
+rappelé), retrait valide, retrait refusé (montant > épargné), consultation de la progression et
+du détail des mouvements, suppression refusée (objectif non vide, montant restant rappelé) puis
+acceptée une fois l'objectif vidé par retrait.
+
+### Reste à faire
+
+`VueCategorie`/`ControleurCategorie`, `VueStatistique`/`ControleurStatistique`, chacun câblé un
+par un ; puis suppression de `Menu.java`. Le défaut de sauvegarde non atomique dans
+`GestionnaireFichier` reste non traité.
+
+## 2026-08-20 — Précision : `getObjectif(id)` s'appuie sur une propriété de fait, pas structurelle
+
+### Choix de conception
+
+Question posée après coup sur l'écran épargne : `ServiceEpargne.getObjectif(id)` renvoie une
+référence directe sur l'`Epargne` du portefeuille (pas une copie) à `ControleurEpargne` — est-ce
+que ça permettrait de la modifier en contournant le service ? Vérifié dans le code : non,
+aujourd'hui. `ControleurEpargne` n'appelle que des getters sur cette référence (`getNom()`,
+`getMouvements()`), et `Epargne` n'expose aucun setter — sa seule méthode de mutation,
+`ajouterMouvement(MouvementEpargne)`, n'est appelée nulle part hors de `ServiceEpargne`.
+
+**Mais cette absence de risque tient uniquement à l'absence de setters sur `Epargne`
+aujourd'hui — ce n'est pas une protection structurelle**, contrairement à l'accès à
+`Portefeuille` : celui-ci est verrouillé par la visibilité de paquet de
+`ServicePortefeuille.getDonnees()` (le compilateur refuse la compilation si un contrôleur essaie
+d'y accéder, cf. entrée du 2026-08-19 sur `getDonnees()`). Ici, rien n'empêcherait
+`ControleurEpargne` d'appeler un setter sur l'`Epargne` reçue si `Epargne` en exposait un un
+jour : le compilateur laisserait passer, puisque `Epargne` (dans `modele.entite`) est
+accessible depuis `controleur`.
+
+### Points à savoir défendre
+
+- **Si un setter est ajouté un jour à `Epargne` (par exemple pour renommer un objectif), que se
+  passe-t-il ?** `ControleurEpargne` pourrait alors modifier l'objectif directement via la
+  référence obtenue par `getObjectif(id)`, sans passer par `ServiceEpargne` ni déclencher
+  `sauvegarder()` — la modification resterait en mémoire pour la session en cours, mais
+  disparaîtrait au prochain chargement du fichier, sans qu'aucune règle de gestion n'ait été
+  vérifiée au passage.
+- **Pourquoi ne pas corriger ça dès maintenant, par exemple en ne renvoyant plus l'`Epargne`
+  elle-même ?** Parce qu'il n'y a rien à corriger tant qu'aucun setter n'existe : ce serait de la
+  protection contre un risque qui n'existe pas encore, pour une méthode qui aujourd'hui ne fait
+  que lire. La bonne réaction est de revoir `getObjectif(id)` au moment où un setter serait
+  effectivement ajouté à `Epargne`, pas avant.
+
+### Reste à faire
+
+Si `Epargne` reçoit un setter un jour, revoir l'exposition de `ServiceEpargne.getObjectif(id)` :
+par exemple ne plus renvoyer l'`Epargne` elle-même aux contrôleurs, ou n'autoriser sa
+modification que via des méthodes dédiées de `ServiceEpargne`, sur le modèle de
+`ServicePortefeuille.getDonnees()`.

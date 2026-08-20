@@ -56,10 +56,6 @@ public class VueTransaction extends VueConsole {
         afficherMessage(String.format("Attention : cette dépense rendra votre solde négatif (nouveau solde : %.2f FCFA).", soldeApres));
     }
 
-    public void afficherOperationAnnulee() {
-        afficherMessage("Opération annulée.");
-    }
-
     public void afficherDepenseEnregistree() {
         afficherMessage("Dépense enregistrée.");
     }

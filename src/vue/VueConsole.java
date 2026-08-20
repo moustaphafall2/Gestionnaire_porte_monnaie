@@ -93,6 +93,12 @@ public class VueConsole {
         }
     }
 
+    // Message affiché quand l'utilisateur répond non à une confirmation, quel que soit l'écran :
+    // générique, réutilisé par tous les écrans qui demandent confirmation avant d'enregistrer.
+    public void afficherOperationAnnulee() {
+        afficherMessage("Opération annulée.");
+    }
+
     // Affiche un message et lit une réponse oui/non.
     public boolean confirmer(String message) {
         while (true) {
