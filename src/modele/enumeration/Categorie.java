@@ -16,9 +16,12 @@ public enum Categorie {
     LOISIRS("Loisirs", TypeTransaction.DEPENSE),
     SANTE("Santé", TypeTransaction.DEPENSE),
     ABONNEMENTS("Abonnements", TypeTransaction.DEPENSE),
-    AUTRE_DEPENSE("Autre", TypeTransaction.DEPENSE),
+    EntretienVestimentaire("Entretien vestimentaire", TypeTransaction.DEPENSE),
+    COUTURE("Coûture", TypeTransaction.DEPENSE),
+    AUTRE_DEPENSE("Autre dépense", TypeTransaction.DEPENSE),
     SALAIRE("Salaire", TypeTransaction.REVENU),
-    AUTRE_REVENU("Autre", TypeTransaction.REVENU);
+    BOURSE("Bourse", TypeTransaction.REVENU),
+    AUTRE_REVENU("Autre revenu", TypeTransaction.REVENU);
 
     // Les attributs : chaque valeur ci-dessus va stocker les siens
     private final String libelle;
