@@ -69,6 +69,13 @@ public class ServiceTransaction {
         servicePortefeuille.sauvegarder();
     }
 
+    // Recherche publique d'une transaction par id, utilisée par ControleurTransaction pour
+    // connaître le type de la transaction avant de proposer les catégories actives compatibles,
+    // lors d'une modification.
+    public Transaction getTransaction(int id) {
+        return trouverTransaction(id);
+    }
+
     // Historique complet, trié du plus récent au plus ancien
     public List<Transaction> getHistorique() {
         List<Transaction> historique = new ArrayList<>(servicePortefeuille.getDonnees().getTransactions());

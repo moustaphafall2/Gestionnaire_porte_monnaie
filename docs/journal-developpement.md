@@ -771,3 +771,145 @@ correctif profite à toutes les vues à venir (`VueEpargne`, `VueCategorie`,
 atomique (pas de fichier `.tmp` puis renommage), alors que le `CLAUDE.md` l'exige — une coupure
 en pleine écriture pourrait corrompre `portefeuille.json`. Hors périmètre de cette étape, à
 traiter séparément.
+
+## 2026-08-20 — Écran "Voir l'historique des transactions" : consultation, filtres, modification, suppression
+
+### Ce qui a été écrit
+
+- **`VueTransaction`** : six méthodes de plus — `afficherMenuHistorique()` et
+  `afficherMenuModifierSupprimer()` (sous-menus à plusieurs lignes, sur le même modèle que
+  `VuePrincipale.afficherMenuPrincipal()`), `afficherTransactions(List<Transaction>)` (affiche
+  chaque transaction via son `toString()`, ou un message dédié si la liste est vide),
+  `demanderCategorieParmiToutes()` (délègue à `demanderCategorie(...)` déjà existante, avec
+  `List.of(Categorie.values())` au lieu des seules catégories actives), `demanderType()`,
+  `afficherTransactionModifiee()`, `afficherTransactionSupprimee()`. Aucune nouvelle classe :
+  ces méthodes rejoignent `VueTransaction`, qui couvre maintenant les trois écrans du domaine
+  transaction.
+- **`ControleurTransaction`** : `gererHistorique()` (nouvelle méthode publique, extraite de
+  `Menu.gererHistorique`) et `gererModificationSuppressionTransaction()` (privée, extraite de
+  `Menu.gererModificationSuppressionTransaction`), qui réutilise le
+  `confirmerNouvelleSauvegarde(...)` déjà écrit pour les écrans 2 et 3.
+- **`ControleurPrincipal`** : le `case 4` du switch délègue à
+  `controleurTransaction.gererHistorique()` au lieu d'afficher "en cours de migration".
+
+### Choix de conception
+
+**Pourquoi ne pas créer `VueHistorique`/`ControleurHistorique` séparés ?** Consigne explicite
+pour cette étape : réutiliser `VueTransaction`/`ControleurTransaction` plutôt que multiplier les
+classes pour un même domaine. Les trois écrans (ajouter une dépense, ajouter un revenu, gérer
+l'historique) manipulent tous des `Transaction` via `ServiceTransaction` ; les séparer en
+classes distinctes aurait dupliqué `demanderDescription`, `demanderCategorie`,
+`confirmerNouvelleSauvegarde` sans bénéfice.
+
+**`gererModificationSuppressionTransaction` garde un seul bloc `try/catch` à deux niveaux
+d'exception, plutôt que découpé en deux méthodes privées (une pour modifier, une pour
+supprimer).** C'est fidèle à la structure de `Menu.java`, qui traitait déjà les deux cas
+(`choix == 1` / `choix == 2`) dans le même bloc `try`. Deux familles d'exceptions à traiter
+différemment : `ErreurSauvegardeException` déclenche la nouvelle tentative
+(`confirmerNouvelleSauvegarde`, réutilisée telle quelle) ; `IllegalArgumentException` (id
+inconnu) et `IllegalStateException` (catégorie inactive) affichent l'erreur lisible via
+`vueTransaction.afficherErreur(...)`, déjà présente dans `VueConsole` depuis le début — aucune
+nouvelle méthode nécessaire pour ce cas.
+
+**`afficherTransactions` décide elle-même d'afficher "Aucune transaction à afficher." si la
+liste est vide.** Ce n'est pas une règle de gestion (rien dans le tableau du `CLAUDE.md` ne
+porte sur ce cas), juste un choix de présentation d'une liste : contrairement à
+"dépense > solde" (règle explicitement assignée au contrôleur), ici il n'y a pas de décision
+métier à extraire, seulement une mise en forme conditionnelle, à la même place que dans
+`Menu.afficherTransactions` d'origine.
+
+### Points à savoir défendre
+
+- **Pourquoi `demanderCategorieParmiToutes()` propose-t-elle des catégories inactives, alors que
+  l'ajout d'une dépense/d'un revenu (écrans 2 et 3) ne montre que les actives ?** Parce qu'on
+  filtre ou modifie ici des transactions déjà enregistrées, potentiellement avec une catégorie
+  désactivée depuis (règle de gestion : "Désactivation d'une catégorie : sans effet sur les
+  transactions existantes"). Restreindre aux catégories actives aurait rendu impossible de
+  retrouver ou corriger une transaction dans ce cas.
+- **La suppression d'une transaction rejoue-t-elle un risque de doublon en cas de nouvelle
+  tentative de sauvegarde ?** Non : comme pour l'ajout, `confirmerNouvelleSauvegarde` ne rappelle
+  jamais `serviceTransaction.supprimerTransaction(id)` (qui chercherait de nouveau la
+  transaction, déjà retirée de la liste), seulement `servicePortefeuille.sauvegarder()` — la
+  suppression a déjà eu lieu en mémoire au moment où l'exception est levée.
+
+### Pièges rencontrés
+
+Aucun cette fois : le correctif du `Scanner` statique (entrée précédente) a suffi, testé à la
+main sur tous les chemins (tout afficher, filtre date/catégorie/type, modification, suppression,
+id inconnu, catégorie inactive, annulation par id à 0) sans reproduire le problème de saisies
+perdues.
+
+### Reste à faire
+
+`VueEpargne`/`ControleurEpargne`, `VueCategorie`/`ControleurCategorie`,
+`VueStatistique`/`ControleurStatistique`, chacun câblé un par un ; puis suppression de
+`Menu.java`. Le défaut de sauvegarde non atomique dans `GestionnaireFichier` reste non traité
+(voir entrée précédente).
+
+## 2026-08-20 — Correction : catégories actives seulement à la modification d'une transaction
+
+### Ce qui a été écrit
+
+- **`ServiceTransaction`** : `getTransaction(int id)`, méthode publique qui délègue à la
+  recherche interne déjà existante (`trouverTransaction`, restée privée). Nécessaire pour que
+  `ControleurTransaction` connaisse le type de la transaction avant de choisir quelles
+  catégories proposer.
+- **`ControleurTransaction.gererModificationSuppressionTransaction()`** : au choix "Modifier",
+  récupère d'abord le type de la transaction (`serviceTransaction.getTransaction(id).getType()`),
+  vérifie qu'il existe au moins une catégorie active de ce type (sinon
+  `vueTransaction.afficherAucuneCategorieActive(type)` et retour, même garde que pour l'ajout
+  d'une dépense/d'un revenu), puis appelle `vueTransaction.demanderCategorie(...)` avec
+  `serviceCategorie.getCategoriesActivesDeType(type)` au lieu de `demanderCategorieParmiToutes()`.
+
+### Choix de conception
+
+**Signalé par l'utilisateur du projet en relisant le journal : la modification proposait toutes
+les catégories, y compris inactives, un choix que le service refuse ensuite.** Avant cette
+correction, `demanderCategorieParmiToutes()` était utilisée aussi bien pour filtrer (case 3) que
+pour modifier (case 5 → Modifier) — la même méthode, pour deux besoins différents. Pour filtrer,
+voir les catégories inactives a du sens (retrouver une transaction enregistrée avec une
+catégorie désactivée depuis). Pour modifier, ça n'en a aucun : `ServiceTransaction.modifierTransaction`
+appelle `validerCategorieActive`, donc choisir une catégorie inactive aboutit systématiquement à
+une `IllegalStateException`, après que l'utilisateur a déjà saisi le montant, la date et la
+description. Autant ne jamais proposer ce choix.
+
+**Pourquoi restreindre aux catégories actives *du même type* que la transaction, pas à toutes
+les catégories actives ?** Le type d'une transaction ne se modifie jamais (`Transaction` n'a pas
+de `setType`) : `setCategorie` vérifie que la nouvelle catégorie correspond toujours au type
+d'origine (règle "catégorie cohérente"). Proposer une catégorie active mais du mauvais type
+aboutirait cette fois à une `IllegalArgumentException` — même problème, réglé de la même façon.
+
+**Pourquoi vérifier qu'il existe au moins une catégorie active de ce type avant d'appeler
+`demanderCategorie`, plutôt que de la laisser gérer une liste vide ?** `demanderCategorie`
+boucle tant qu'aucun numéro valide n'est saisi ; avec une liste vide, aucun numéro ne peut jamais
+être valide, ce qui bloque l'utilisateur dans une boucle sans issue. Le cas est rare (il faudrait
+avoir désactivé après coup toutes les catégories du type concerné) mais réel, donc traité avec
+la même garde que celle déjà écrite pour l'ajout d'une dépense/d'un revenu.
+
+### Points à savoir défendre
+
+- **Pourquoi le filtre par catégorie (case 3) continue-t-il d'utiliser
+  `demanderCategorieParmiToutes()`, sans la même restriction ?** Parce que filtrer et modifier ne
+  cherchent pas la même chose : filtrer sert à retrouver des transactions existantes, quelle que
+  soit la catégorie sous laquelle elles ont été enregistrées (active ou non aujourd'hui) ;
+  modifier sert à choisir une nouvelle catégorie, qui doit être valide pour être acceptée.
+  Restreindre le filtre aux catégories actives aurait rendu impossible de retrouver une
+  transaction dont la catégorie a été désactivée depuis.
+- **`ControleurTransaction` fait-il un calcul en appelant `.getType()` sur la transaction
+  récupérée ?** Non : c'est un accès à un attribut déjà calculé/stocké via un getter, pas un
+  calcul. La règle "aucun calcul dans le contrôleur" porte sur les opérations qui combinent ou
+  agrègent des données (comme `soldeApres < 0`, comparaison faite plus haut dans ce même
+  contrôleur) — lire un champ pour décider quel service appeler ensuite reste de l'enchaînement,
+  pas du calcul métier.
+
+### Pièges rencontrés
+
+Aucun — testé à la main : modification avec deux catégories actives du bon type (proposées
+seules, sans les sept autres), et cas limite d'aucune catégorie active du type concerné (message
+clair, retour immédiat, pas de blocage).
+
+### Reste à faire
+
+Inchangé : `VueEpargne`/`ControleurEpargne`, `VueCategorie`/`ControleurCategorie`,
+`VueStatistique`/`ControleurStatistique`, puis suppression de `Menu.java`. Le défaut de
+sauvegarde non atomique dans `GestionnaireFichier` reste non traité.

@@ -3,13 +3,15 @@ package vue;
 import java.time.LocalDate;
 import java.util.List;
 
+import modele.entite.Transaction;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
 
 /*
-    * VueTransaction affiche les écrans "Ajouter une dépense" et "Ajouter un revenu". Comme
+    * VueTransaction affiche les écrans "Ajouter une dépense", "Ajouter un revenu" et "Voir
+    * l'historique des transactions" (consultation, filtres, modification, suppression). Comme
     * VuePrincipale, elle hérite de VueConsole pour ses briques de saisie/affichage générales
-    * (lireMontant, lireDate, confirmer...) et n'ajoute que ce qui est propre à ces deux écrans :
+    * (lireMontant, lireDate, confirmer...) et n'ajoute que ce qui est propre à ces écrans :
     * le contrôleur ne construit aucun texte à afficher, il ne fait que lui transmettre les
     * valeurs obtenues des services.
 */
@@ -64,5 +66,63 @@ public class VueTransaction extends VueConsole {
 
     public void afficherRevenuEnregistre() {
         afficherMessage("Revenu enregistré.");
+    }
+
+    // ----- 4. Historique -----
+
+    public void afficherMenuHistorique() {
+        afficherMessage("1. Tout afficher");
+        afficherMessage("2. Filtrer par date");
+        afficherMessage("3. Filtrer par catégorie");
+        afficherMessage("4. Filtrer par type");
+        afficherMessage("5. Modifier ou supprimer une transaction");
+        afficherMessage("6. Retour");
+    }
+
+    public void afficherMenuModifierSupprimer() {
+        afficherMessage("1. Modifier");
+        afficherMessage("2. Supprimer");
+    }
+
+    // Affiche chaque transaction (via son toString(), déjà écrit dans l'entité), ou un message
+    // dédié si la liste reçue est vide.
+    public void afficherTransactions(List<Transaction> transactions) {
+        if (transactions.isEmpty()) {
+            afficherMessage("Aucune transaction à afficher.");
+            return;
+        }
+        for (Transaction transaction : transactions) {
+            afficherMessage(transaction.toString());
+        }
+    }
+
+    // Propose toutes les catégories de l'énumération (pas seulement les catégories actives) :
+    // utile pour filtrer ou modifier une transaction enregistrée avec une catégorie
+    // entretemps désactivée.
+    public Categorie demanderCategorieParmiToutes() {
+        return demanderCategorie(List.of(Categorie.values()));
+    }
+
+    public TypeTransaction demanderType() {
+        while (true) {
+            afficherMessage("1. Dépense");
+            afficherMessage("2. Revenu");
+            int choix = lireEntier("Votre choix : ");
+            if (choix == 1) {
+                return TypeTransaction.DEPENSE;
+            }
+            if (choix == 2) {
+                return TypeTransaction.REVENU;
+            }
+            afficherMessage("Choix invalide.");
+        }
+    }
+
+    public void afficherTransactionModifiee() {
+        afficherMessage("Transaction modifiée.");
+    }
+
+    public void afficherTransactionSupprimee() {
+        afficherMessage("Transaction supprimée.");
     }
 }

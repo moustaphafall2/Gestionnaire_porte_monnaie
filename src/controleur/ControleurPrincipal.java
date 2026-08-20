@@ -8,9 +8,9 @@ import vue.VuePrincipale;
     * ControleurPrincipal tient la boucle du menu principal : il lit le choix de l'utilisateur
     * et aiguille vers l'écran correspondant. Il n'affiche jamais rien lui-même — chaque
     * affichage passe par VuePrincipale, à qui il transmet les valeurs obtenues des services.
-    * Les écrans déjà migrés (solde, ajout d'une dépense/d'un revenu) délèguent directement à
-    * leur contrôleur dédié (ex. ControleurTransaction) ; les quatre autres écrans (historique,
-    * épargne, catégories, statistiques) restent affichés comme "en cours de migration" en
+    * Les écrans déjà migrés (solde, ajout d'une dépense/d'un revenu, historique) délèguent
+    * directement à leur contrôleur dédié (ex. ControleurTransaction) ; les trois autres écrans
+    * (épargne, catégories, statistiques) restent affichés comme "en cours de migration" en
     * attendant leur tour.
 */
 public class ControleurPrincipal {
@@ -44,7 +44,8 @@ public class ControleurPrincipal {
                     case 1 -> gererVoirSolde();
                     case 2 -> controleurTransaction.gererAjouterDepense();
                     case 3 -> controleurTransaction.gererAjouterRevenu();
-                    case 4, 5, 6, 7 -> vuePrincipale.afficherFonctionnaliteIndisponible();
+                    case 4 -> controleurTransaction.gererHistorique();
+                    case 5, 6, 7 -> vuePrincipale.afficherFonctionnaliteIndisponible();
                     case 8 -> continuer = false;
                     default -> vuePrincipale.afficherChoixInvalide();
                 }
