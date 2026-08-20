@@ -5,13 +5,19 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonPrimitive;
 import com.google.gson.JsonSerializer;
+import com.google.gson.JsonSyntaxException;
 
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 
+import metier.ErreurChargementException;
 import metier.ErreurSauvegardeException;
 import modele.entite.Portefeuille;
 
@@ -43,30 +49,59 @@ public class GestionnaireFichier {
                 .create();
     }
 
-    // Sérialise le portefeuille en JSON et l'écrit dans le fichier de sauvegarde.
+    // Sérialise le portefeuille en JSON et l'écrit dans le fichier de sauvegarde, de façon
+    // atomique : on écrit d'abord dans un fichier temporaire, puis on le renomme à la place du
+    // fichier final. Une coupure pendant l'écriture laisse un fichier .tmp incomplet, jamais le
+    // fichier existant à moitié écrit — le renommage (Files.move avec ATOMIC_MOVE) est lui-même
+    // une opération indivisible du système de fichiers, contrairement à écrire directement dans
+    // portefeuille.json.
     public void sauvegarder(Portefeuille portefeuille) {
-        try (FileWriter fichier = new FileWriter(cheminFichier)) {
+        Path cheminFinal = Paths.get(cheminFichier);
+        Path cheminTemporaire = Paths.get(cheminFichier + ".tmp");
+
+        try (BufferedWriter fichier = Files.newBufferedWriter(cheminTemporaire, StandardCharsets.UTF_8)) {
             gson.toJson(portefeuille, fichier);
         } catch (IOException exception) {
             throw new ErreurSauvegardeException("Impossible d'écrire le fichier de sauvegarde : " + cheminFichier, exception);
         }
+
+        try {
+            Files.move(cheminTemporaire, cheminFinal, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException exception) {
+            throw new ErreurSauvegardeException("Impossible de finaliser la sauvegarde : " + cheminFichier, exception);
+        }
     }
 
-    // Lit le fichier JSON et le désérialise en Portefeuille.
-    // Si le fichier n'existe pas encore (premier lancement), retourne un portefeuille vide.
+    // Lit le fichier JSON et le désérialise en Portefeuille. Défensif sur quatre cas, pour que
+    // cette méthode renvoie toujours un portefeuille exploitable plutôt que de planter au
+    // démarrage de l'application :
+    //   1. fichier absent (premier lancement) ;
+    //   2. fichier vide (Gson ne lève rien dans ce cas, il renvoie null) ;
+    //   3. JSON malformé (JsonSyntaxException) ;
+    //   4. listes/ensemble à null après désérialisation (Gson contourne le constructeur).
+    // Seule une vraie erreur de lecture disque (droits, panne...) lève ErreurChargementException :
+    // ce n'est pas un cas qu'on peut raisonnablement réparer en repartant d'un portefeuille vide.
     public Portefeuille charger() {
+        Path chemin = Paths.get(cheminFichier);
         if (!fichierExiste()) {
             return new Portefeuille();
         }
 
-        try (FileReader fichier = new FileReader(cheminFichier)) {
-            return gson.fromJson(fichier, Portefeuille.class);
+        try (BufferedReader fichier = Files.newBufferedReader(chemin, StandardCharsets.UTF_8)) {
+            Portefeuille portefeuille = gson.fromJson(fichier, Portefeuille.class);
+            if (portefeuille == null) {
+                return new Portefeuille();
+            }
+            portefeuille.reparerApresChargement();
+            return portefeuille;
+        } catch (JsonSyntaxException exception) {
+            return new Portefeuille();
         } catch (IOException exception) {
-            throw new RuntimeException("Impossible de lire le fichier de sauvegarde : " + cheminFichier, exception);
+            throw new ErreurChargementException("Impossible de lire le fichier de sauvegarde : " + cheminFichier, exception);
         }
     }
 
     public boolean fichierExiste() {
-        return new File(cheminFichier).exists();
+        return Files.exists(Paths.get(cheminFichier));
     }
 }

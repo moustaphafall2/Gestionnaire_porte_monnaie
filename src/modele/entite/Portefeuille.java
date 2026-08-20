@@ -115,4 +115,22 @@ public class Portefeuille {
         }
         throw new IllegalArgumentException("Aucun objectif avec l'identifiant " + idObjectif + ".");
     }
+
+    // Gson contourne le constructeur à la désérialisation (il remplit les champs directement) :
+    // un champ absent du JSON, ou explicitement "null", reste à null au lieu d'être initialisé
+    // à une collection vide. Utilisée uniquement par GestionnaireFichier.charger(), juste après
+    // la désérialisation, pour garantir qu'un Portefeuille rechargé est toujours exploitable
+    // (getTransactions()/getCategoriesActives()/getObjectifs() ne doivent jamais lever de
+    // NullPointerException).
+    public void reparerApresChargement() {
+        if (transactions == null) {
+            transactions = new ArrayList<>();
+        }
+        if (categoriesActives == null) {
+            categoriesActives = new HashSet<>();
+        }
+        if (objectifs == null) {
+            objectifs = new ArrayList<>();
+        }
+    }
 }

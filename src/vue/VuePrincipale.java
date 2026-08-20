@@ -26,10 +26,6 @@ public class VuePrincipale extends VueConsole {
         afficherMessage(String.format("Total épargné : %.2f FCFA", totalEpargne));
     }
 
-    public void afficherFonctionnaliteIndisponible() {
-        afficherMessage("Fonctionnalité en cours de migration, pas encore disponible.");
-    }
-
     public void afficherChoixInvalide() {
         afficherMessage("Choix invalide, veuillez recommencer.");
     }

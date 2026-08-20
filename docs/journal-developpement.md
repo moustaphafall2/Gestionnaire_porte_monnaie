@@ -1168,3 +1168,150 @@ dernier. Rien à corriger dans le code ; cette entrée trace la vérification el
 
 Inchangé : `VueStatistique`/`ControleurStatistique`, puis suppression de `Menu.java`. Le défaut
 de sauvegarde non atomique dans `GestionnaireFichier` reste non traité.
+
+## 2026-08-20 — Écran "Voir les statistiques" : dernier écran migré
+
+### Ce qui a été écrit
+
+- **`VueStatistique`** (nouvelle classe, `vue`, hérite de `VueConsole`) : deux méthodes —
+  `afficherTotauxParCategorie(Map<Categorie, Double>)` (avec le message dédié si la période ne
+  contient aucune dépense) et `afficherTotalRevenusEtDepenses(double, double)`.
+- **`ControleurStatistique`** (nouvelle classe, `controleur`) : `gererStatistiques()`, extraite
+  de `Menu.gererStatistiques`. Ne dépend que de `ServiceStatistique` : pas de
+  `ServicePortefeuille`, puisque l'écran ne sauvegarde jamais rien.
+- **`ControleurPrincipal`**/**`Main`** : option 7 branchée. Les sept écrans du menu principal ont
+  désormais chacun leur contrôleur dédié.
+- **`VuePrincipale.afficherFonctionnaliteIndisponible()`** supprimée : plus aucun `case` du
+  switch de `ControleurPrincipal` ne l'appelait (elle ne servait qu'aux écrans pas encore
+  migrés), vérifié par recherche dans tout `src/` avant suppression.
+
+### Choix de conception
+
+**`ControleurStatistique` ne reçoit pas `ServicePortefeuille`.** Contrairement aux six écrans
+précédents, cet écran ne modifie jamais rien : les deux méthodes de `ServiceStatistique` ne font
+que lire et agréger (déjà noté dans l'entrée du 2026-08-19 sur `ServiceStatistique`), donc pas de
+`sauvegarder()` à appeler, pas de nouvelle tentative à prévoir, et pas besoin de la dépendance
+correspondante. Un contrôleur qui ne peut structurellement pas déclencher de sauvegarde n'a pas
+de raison de détenir la référence qui le permettrait.
+
+**Pourquoi supprimer `afficherFonctionnaliteIndisponible()` maintenant plutôt que la laisser
+inutilisée ?** Elle n'avait de sens que comme message temporaire pour les écrans pas encore
+câblés ; une fois les sept écrans migrés, plus aucun appelant ne pouvait exister par
+construction (le `switch` de `ControleurPrincipal` couvre les cas 1 à 8 un par un). La garder
+aurait laissé du code mort dans une classe déjà migrée, sans utilité pour la suite.
+
+### Points à savoir défendre
+
+- **Où est appliquée la règle "les mouvements d'épargne sont exclus des statistiques" ?** Nulle
+  part explicitement dans ce nouvel écran : elle est garantie par construction depuis la
+  migration de `ServiceStatistique` (entrée du 2026-08-19), dont les deux méthodes ne parcourent
+  que `getTransactions()` — les mouvements d'épargne n'y ont jamais été stockés (ils vivent dans
+  `Epargne.mouvements`). Vérifié à la main : une contribution de 200000 FCFA à un objectif
+  n'apparaît dans aucun des deux totaux affichés.
+- **`ControleurStatistique` fait-il un calcul en extrayant `totaux[0]`/`totaux[1]` du tableau
+  renvoyé par `getTotalRevenusEtDepenses` ?** Non : c'est un accès positionnel à un résultat déjà
+  calculé par le service, pas une opération arithmétique. Même raisonnement que pour
+  `.getType()` sur une transaction (entrée du 2026-08-20 sur la modification d'une transaction).
+
+### Pièges rencontrés
+
+Aucun — testé à la main : totaux par catégorie et comparaison revenus/dépenses sur une période
+contenant des transactions des deux types et une contribution d'épargne (exclue, comme attendu),
+période sans aucune dépense (message dédié), et vérification que le fichier `portefeuille.json`
+reste strictement identique (`md5sum` avant/après) après consultation.
+
+### Reste à faire
+
+Les sept écrans du menu principal sont migrés. Il ne reste que la suppression de `Menu.java`,
+devenue entièrement sans usage (à faire sur demande, pas avant). Le défaut de sauvegarde non
+atomique dans `GestionnaireFichier` reste non traité.
+
+## 2026-08-20 — `GestionnaireFichier` : sauvegarde atomique, UTF-8 explicite, chargement défensif
+
+### Ce qui a été écrit
+
+- **`ErreurChargementException`** (nouvelle classe, `metier`, sur le même modèle que
+  `ErreurSauvegardeException`) : levée uniquement pour une vraie erreur de lecture disque
+  (droits d'accès, panne), pas pour les trois autres cas défensifs ci-dessous.
+- **`Portefeuille.reparerApresChargement()`** : réinitialise `transactions`, `categoriesActives`
+  et `objectifs` à des collections vides s'ils sont `null`. Publique (obligatoire :
+  `GestionnaireFichier`, dans `persistance`, ne peut pas accéder à des champs privés d'un autre
+  paquet), mais n'a de sens qu'appelée juste après une désérialisation Gson.
+- **`GestionnaireFichier.sauvegarder()`** : écrit maintenant dans `portefeuille.json.tmp`
+  (`Files.newBufferedWriter`, UTF-8 explicite), puis renomme ce fichier temporaire vers
+  `portefeuille.json` avec `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)`.
+- **`GestionnaireFichier.charger()`** : réécrite pour traiter les quatre cas défensifs demandés
+  — fichier absent (déjà géré), fichier vide (`gson.fromJson` renvoie `null`, détecté et remplacé
+  par un portefeuille neuf), JSON malformé (`JsonSyntaxException` attrapée, même traitement),
+  listes à `null` après désérialisation (`reparerApresChargement()` appelée avant de renvoyer le
+  résultat). Lecture aussi passée en UTF-8 explicite (`Files.newBufferedReader`). Seule une vraie
+  `IOException` (pas les trois cas ci-dessus) lève `ErreurChargementException`.
+- **`Main`** : `VuePrincipale` construite avant le chargement, pour pouvoir attraper
+  `ErreurChargementException` et afficher un message lisible (`vuePrincipale.afficherErreur(...)`)
+  avant d'arrêter proprement, plutôt que de laisser une trace d'exception brute empêcher le
+  démarrage.
+
+### Choix de conception
+
+**`Files.move(..., ATOMIC_MOVE)` plutôt que `File.renameTo()`.** `renameTo()` renvoie un simple
+`boolean` sans dire pourquoi il a échoué, et ne garantit rien sur l'atomicité selon les systèmes.
+`Files.move` avec `ATOMIC_MOVE` est l'outil standard de `java.nio.file` pour cette garantie
+précise : soit le renommage a lieu en entier, soit il échoue en entier (et lève une exception
+explicite) — jamais un état intermédiaire où `portefeuille.json` serait à moitié écrit. Écrire
+d'abord dans un fichier séparé (`.tmp`) puis renommer garantit qu'une coupure pendant l'écriture
+laisse le fichier `.tmp` incomplet mais ne touche jamais au fichier existant.
+
+**Pourquoi `charger()` ne lève jamais d'exception pour un fichier vide ou un JSON malformé, mais
+en lève une pour une erreur de lecture disque.** Les deux premiers cas sont réparables sans
+perte réelle : un fichier vide ou corrompu ne contenait de toute façon aucune donnée exploitable,
+repartir d'un portefeuille neuf est le seul choix raisonnable et rejoint la définition du
+"chargement défensif" du `CLAUDE.md` ("charger() renvoie toujours un portefeuille exploitable").
+Une erreur de lecture disque est différente : le fichier existe peut-être avec de vraies données
+dedans, simplement inaccessibles à cet instant (droits, panne) — y répondre par un portefeuille
+vide masquerait silencieusement des données réelles. C'est pour ça que ce cas-là, seul, lève une
+exception que `Main` attrape explicitement.
+
+**`reparerApresChargement()` réinitialise les collections plutôt que de rejeter tout le
+portefeuille si une seule liste est `null`.** Un JSON valide mais légèrement incomplet (par
+exemple un fichier de sauvegarde très ancien, avant l'ajout d'`objectifs`) contient quand même
+de vraies transactions à ne pas perdre. Réinitialiser uniquement le ou les champs manquants,
+plutôt que de tout jeter comme pour un JSON malformé, préserve tout ce qui a pu être lu
+correctement.
+
+### Points à savoir défendre
+
+- **Pourquoi `reparerApresChargement()` doit-elle être publique, alors que la règle du projet est
+  de garder les entités aussi fermées que possible ?** Parce que `GestionnaireFichier` (paquet
+  `persistance`) et `Portefeuille` (paquet `modele.entite`) sont dans des paquets différents :
+  contrairement à `ServicePortefeuille.getDonnees()` (même paquet que les autres services,
+  visibilité de paquet possible), il n'existe pas de visibilité intermédiaire entre `private` et
+  `public` qui couvre deux paquets différents. La méthode reste malgré tout étroite (un seul
+  travail, pas d'accès en écriture arbitraire) et n'a de sens que juste après une
+  désérialisation — un contrôleur qui l'appellerait n'importe où ailleurs ne casserait rien,
+  juste ne servirait à rien.
+- **Que se passe-t-il concrètement si l'application est interrompue (coupure de courant, `kill
+  -9`) pendant `sauvegarder()` ?** Deux moments possibles : pendant l'écriture du `.tmp` (le
+  fichier `portefeuille.json` d'origine n'est jamais touché, il reste valide, seul le `.tmp`
+  reste incomplet et sera écrasé à la prochaine sauvegarde) ; ou pendant le renommage lui-même
+  (impossible d'observer un état intermédiaire, `Files.move(..., ATOMIC_MOVE)` garantit que le
+  système de fichiers voit soit l'ancien fichier, soit le nouveau, jamais un mélange).
+- **Pourquoi le fichier vide et le JSON malformé sont-ils traités par le même `return new
+  Portefeuille()`, alors que ce sont deux causes différentes ?** Parce que la conséquence pour
+  l'utilisateur est la même dans les deux cas : aucune donnée exploitable n'a pu être lue, la
+  seule réponse sensée est de repartir d'un portefeuille vide plutôt que de distinguer l'origine
+  exacte du problème dans un message que personne ne pourrait de toute façon corriger à la main.
+
+### Pièges rencontrés
+
+Aucun — testé à la main : fichier absent, fichier vide, JSON malformé (les trois sans plantage,
+application utilisable normalement ensuite), listes à `null` après désérialisation (écran
+historique et écran épargne consultés sans `NullPointerException`, chacun affichant son message
+"aucun(e)... pour le moment"), sauvegarde suivie d'une relecture (solde retrouvé correctement),
+absence de fichier `.tmp` résiduel après une sauvegarde réussie, et caractères accentués
+(`café à la crème brûlée`) préservés à l'identique dans le JSON après écriture.
+
+### Reste à faire
+
+Les sept écrans du menu principal sont migrés, la persistance est maintenant sûre. Il ne reste
+que la suppression de `Menu.java`, devenue entièrement sans usage (à faire sur demande, pas
+avant).
