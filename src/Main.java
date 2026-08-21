@@ -1,21 +1,21 @@
-import controleur.ControleurCategorie;
-import controleur.ControleurEpargne;
-import controleur.ControleurPrincipal;
-import controleur.ControleurStatistique;
-import controleur.ControleurTransaction;
-import modele.entite.Portefeuille;
-import modele.exception.ErreurChargementException;
-import modele.persistance.GestionnaireFichier;
-import modele.service.ServiceCategorie;
-import modele.service.ServiceEpargne;
-import modele.service.ServicePortefeuille;
-import modele.service.ServiceStatistique;
-import modele.service.ServiceTransaction;
-import vue.VueCategorie;
-import vue.VueEpargne;
-import vue.VuePrincipale;
-import vue.VueStatistique;
-import vue.VueTransaction;
+import presentation.controller.ControleurCategorie;
+import presentation.controller.ControleurEpargne;
+import presentation.controller.ControleurPrincipal;
+import presentation.controller.ControleurStatistique;
+import presentation.controller.ControleurTransaction;
+import domain.entity.Portefeuille;
+import exception.ErreurChargementException;
+import infrastructure.persistence.GestionnaireFichier;
+import application.service.implementation.ServiceCategorie;
+import application.service.implementation.ServiceEpargne;
+import application.service.implementation.ServicePortefeuille;
+import application.service.implementation.ServiceStatistique;
+import application.service.implementation.ServiceTransaction;
+import presentation.view.VueCategorie;
+import presentation.view.VueEpargne;
+import presentation.view.VuePrincipale;
+import presentation.view.VueStatistique;
+import presentation.view.VueTransaction;
 
 /*
     * Point d'entrée du programme. Son unique rôle est d'initialiser les objets nécessaires

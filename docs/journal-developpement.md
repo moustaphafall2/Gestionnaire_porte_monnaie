@@ -1660,3 +1660,99 @@ Aucun — chaque changement a été vérifié par une compilation complète.
 Les cinq contrôleurs sont maintenant conformes au critère à quatre catégories, y compris son seul
 cas limite documenté (`ControleurConsole`). Reste toujours la suppression de `Menu.java`,
 inchangée depuis les entrées précédentes.
+
+## 2026-08-21 — Nouvelle architecture en couches, étape 1 : déplacement pur
+
+Le CLAUDE.md a été mis à jour par la maîtresse de stage : nouvelle arborescence en couches
+(`presentation`, `application`, `domain`, `infrastructure`, `exception`), à mettre en place en
+cinq étapes. Cette entrée couvre l'étape 1 : le déplacement des fichiers existants, sans aucun
+changement de comportement, de signature, ni de nouvelle classe.
+
+### Ce qui a été écrit
+
+Aucun fichier créé, aucun retiré, aucune méthode touchée. Seulement des déplacements et la mise à
+jour des `package`/`import` qui en découle :
+
+- `controleur/` → `presentation/controller/` (les six contrôleurs, `controleur` devient
+  `presentation.controller`)
+- `vue/` → `presentation/view/` (les six vues, `vue` devient `presentation.view`)
+- `modele/iService/` → `application/service/interfaces/` (les cinq `IServiceXxx`, `modele.iService`
+  devient `application.service.interfaces` — paquet nommé `interfaces` avec un s, `interface`
+  étant un mot réservé)
+- `modele/service/` → `application/service/implementation/` (les cinq `ServiceXxx` et
+  `CalculEpargne`, `modele.service` devient `application.service.implementation`)
+- `modele/entite/` → `domain/entity/` (les quatre entités)
+- `modele/enumeration/` → `domain/enumeration/` (les trois énumérations)
+- `modele/persistance/` → `infrastructure/persistence/` (`GestionnaireFichier`)
+- `modele/exception/` → `exception/` (les deux exceptions, paquet racine `exception`, au même
+  niveau que `presentation`/`application`/`domain`/`infrastructure`, comme demandé)
+- `application/dto/` créé, vide : réservé à l'étape 3, rien dedans pour l'instant. Un dossier vide
+  n'est pas suivi par Git ; il réapparaîtra dans le dépôt dès que le premier DTO y sera ajouté.
+- `Main.java` reste à la racine de `src/`, ses imports mis à jour vers les nouveaux paquets.
+- Un commentaire de `ControleurConsole` qui parlait encore de "classe de modele" a été corrigé
+  pour refléter la nouvelle terminologie (`application`, couche service).
+- Les anciens dossiers `controleur/`, `vue/`, `modele/` (et ses sous-dossiers) ont été supprimés,
+  devenus vides après le déplacement.
+
+### Choix de conception
+
+**Pourquoi un simple `mv` plus une substitution de texte, plutôt que de retaper les fichiers.**
+La consigne était stricte : déplacement pur, aucun changement de comportement. Retaper un fichier,
+même sans intention de le modifier, est le genre d'étape qui introduit des fautes de frappe
+invisibles à l'œil. Déplacer le fichier tel quel puis ne changer que les lignes `package`/`import`
+(un remplacement de texte mécanique, identique partout où le même ancien chemin apparaît) réduit
+le risque au minimum : soit le remplacement est fait partout à l'identique, soit la compilation
+échoue immédiatement et le signale.
+
+**Pourquoi les commentaires qui citent un ancien chemin de paquet ont aussi été corrigés par le
+même mécanisme.** Plusieurs classes expliquent leur rôle en citant le chemin d'un paquet voisin
+(par exemple "les autres services de modele.service"). Ces mentions étaient devenues fausses avec
+le déplacement ; les laisser en l'état aurait rendu le journal et les commentaires trompeurs pour
+la relecture. Comme la chaîne remplacée (`modele.service`, `modele.entite`...) est la même dans le
+code et dans les commentaires, une seule substitution a suffi pour les deux à la fois.
+
+**Pourquoi `application/dto/` reste un dossier physique vide plutôt que ne pas être créé du
+tout.** La cible de l'étape 1 liste ce dossier explicitement, même vide : il marque la place
+réservée pour l'étape 3, et évite d'avoir à se souvenir plus tard de son emplacement exact dans
+l'arborescence.
+
+### Points à savoir défendre
+
+- **`ServicePortefeuille.getDonnees()` est-elle toujours protégée après le déplacement ?** Oui,
+  vérifié concrètement : un fichier de test placé dans `presentation.controller` qui tente
+  `servicePortefeuille.getDonnees()` refuse de compiler, avec le message "getDonnees() is not
+  public in ServicePortefeuille; cannot be accessed from outside package". La visibilité de
+  paquet ne dépend pas du nom du paquet, seulement du fait que l'appelant soit dans le même
+  paquet ou non — `application.service.implementation` protège exactement comme `modele.service`
+  le faisait avant.
+- **Pourquoi le paquet des interfaces s'appelle-t-il `interfaces` avec un `s` ?** `interface` est
+  un mot réservé du langage Java (comme `class` ou `public`) : il ne peut pas être utilisé comme
+  identifiant, donc pas comme nom de paquet. `interfaces` (au pluriel) est le contournement
+  imposé par la maîtresse de stage.
+- **`exception` n'est-il pas mal placé, isolé au même niveau que les quatre autres paquets
+  racine ?** C'est une décision explicite de la maîtresse de stage, pas une erreur : les
+  exceptions ne sont spécifiques à aucune des quatre couches (une erreur de sauvegarde concerne
+  `infrastructure`, une erreur de chargement aussi, mais rien n'empêche une future couche d'en
+  définir une autre) — les garder à la racine évite de choisir arbitrairement une couche pour les
+  héberger.
+
+### Pièges rencontrés
+
+Aucun — chaque étape (déplacement, substitution des paquets/imports, suppression des anciens
+dossiers) a été vérifiée par une compilation complète avant de passer à la suivante, et un test
+de bout en bout sur les sept écrans a été fait avant de conclure. Une seule vérification a
+demandé de l'attention : m'assurer que la substitution automatique des chemins de paquets ne
+touchait pas les mots ordinaires "vue" et "contrôleur" employés comme noms communs dans les
+commentaires en français (par exemple "transmet le résultat à la vue") — la substitution a donc
+été limitée aux formes qualifiées (`vue.VueXxx`, `controleur.ControleurXxx`, les lignes
+`package`), jamais au mot seul.
+
+### Reste à faire
+
+Étapes 2 à 5 du CLAUDE.md : `PortefeuilleRepository`, DTO, réduction des dépendances autour de
+`ServicePortefeuille`, nettoyage final. Aucune prise d'avance pour l'instant.
+
+En marge de cette étape : `Menu.java`, que les entrées précédentes du journal signalaient comme
+restant à supprimer, n'existe déjà plus sur le disque — sa suppression a dû être faite lors d'un
+nettoyage antérieur non documenté ici. Ce point est donc clos, sans qu'une action supplémentaire
+soit nécessaire.
