@@ -16,28 +16,38 @@ ni base de données — les données sont sauvegardées localement dans un fichi
 
 ## Architecture
 
-Le projet suit une architecture MVC stricte, avec un contrôleur et une vue par écran :
+Le projet suit une architecture en couches, avec un contrôleur et une vue par écran, et une
+interface par service :
 
 ```
 src/
-├── Main.java        Point d'entrée : construit services, vues et contrôleurs, démarre la boucle
-├── modele/
-│   ├── entite/       Portefeuille, Transaction, Epargne, MouvementEpargne — structure seulement
-│   ├── enumeration/  Categorie, TypeTransaction, SensMouvement
-│   ├── service/      Toute la logique métier et les calculs (ServiceTransaction, ServiceEpargne,
-│   │                  ServiceCategorie, ServiceStatistique, ServicePortefeuille, CalculEpargne)
-│   ├── persistance/  GestionnaireFichier — seule classe autorisée à lire/écrire sur le disque
-│   └── exception/    ErreurSauvegardeException, ErreurChargementException
-├── vue/              Affichage console et saisie utilisateur, une classe par écran
-└── controleur/       Enchaîne saisie (vue) → règle métier (service) → affichage (vue)
+├── Main.java                   Point d'entrée : construit services, vues et contrôleurs, démarre la boucle
+├── presentation/
+│   ├── controller/              Enchaîne saisie (vue) → règle métier (service) → affichage (vue), un
+│   │                             contrôleur par écran, plus ControleurConsole (reprise sur échec de
+│   │                             sauvegarde, commune aux contrôleurs qui modifient des données)
+│   └── view/                    Affichage console et saisie utilisateur, une classe par écran
+├── application/
+│   ├── service/
+│   │   ├── interfaces/           Une interface IServiceXxx par service, déclarant ses méthodes publiques
+│   │   └── implementation/       Toute la logique métier et les calculs (ServiceTransaction, ServiceEpargne,
+│   │                             ServiceCategorie, ServiceStatistique, ServicePortefeuille, CalculEpargne)
+│   └── dto/                      Objets de transfert vers la présentation (à venir)
+├── domain/
+│   ├── entity/                   Portefeuille, Transaction, Epargne, MouvementEpargne — structure seulement
+│   └── enumeration/              Categorie, TypeTransaction, SensMouvement
+├── infrastructure/
+│   └── persistence/              GestionnaireFichier — seule classe autorisée à lire/écrire sur le disque
+└── exception/                    ErreurSauvegardeException, ErreurChargementException
 ```
 
 Les entités ne portent que leur structure (attributs, constructeur, getters) : aucun calcul,
-aucune règle qui dépend d'un autre objet. Les vues n'importent jamais `modele.service` — elles
-affichent et lisent, sans déclencher aucun traitement. Les contrôleurs n'affichent jamais rien
-directement et ne contiennent aucun calcul métier : ils appellent un service et transmettent le
-résultat à la vue. La sauvegarde est déclenchée par les services (`ServicePortefeuille.sauvegarder()`),
-jamais par une entité ni par un contrôleur directement.
+aucune règle qui dépend d'un autre objet. Les vues n'importent jamais une implémentation de
+service — elles affichent et lisent, sans déclencher aucun traitement. Les contrôleurs
+n'affichent jamais rien directement et ne contiennent aucun traitement : ils déclarent leurs
+dépendances de service par le type de l'interface (`IServiceXxx`), appellent un service et
+transmettent le résultat à la vue. La sauvegarde est déclenchée par les services
+(`ServicePortefeuille.sauvegarder()`), jamais par une entité ni par un contrôleur directement.
 
 ## Dépendances
 
@@ -72,4 +82,4 @@ sauvegarde ne peut pas corrompre le fichier existant.
 Le dossier `docs/` contient la modélisation complète du projet (contexte, cas d'utilisation,
 diagrammes, règles de gestion) et la spécification détaillée de chaque classe.
 `docs/journal-developpement.md` retrace, étape par étape, les choix de conception faits pendant
-le développement — en particulier la migration vers l'architecture MVC actuelle.
+le développement — en particulier la migration vers l'architecture en couches actuelle.
