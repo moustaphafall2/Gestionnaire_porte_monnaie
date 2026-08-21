@@ -1,4 +1,4 @@
-package modele.IService;
+package modele.iService;
 
 import java.util.List;
 import java.util.Set;

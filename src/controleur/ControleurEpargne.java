@@ -5,8 +5,8 @@ import java.util.List;
 
 import modele.entite.Epargne;
 import modele.exception.ErreurSauvegardeException;
-import modele.IService.IServiceEpargne;
-import modele.IService.IServicePortefeuille;
+import modele.iService.IServiceEpargne;
+import modele.iService.IServicePortefeuille;
 import vue.VueEpargne;
 
 /*

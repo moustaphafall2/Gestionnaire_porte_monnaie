@@ -1,4 +1,4 @@
-package modele.IService;
+package modele.iService;
 
 public interface IServicePortefeuille {
    

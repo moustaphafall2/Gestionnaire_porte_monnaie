@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.util.Map;
 
 import modele.enumeration.Categorie;
-import modele.IService.IServiceStatistique;
+import modele.iService.IServiceStatistique;
 import vue.VueStatistique;
 
 /*

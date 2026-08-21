@@ -7,9 +7,9 @@ import modele.entite.Transaction;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
 import modele.exception.ErreurSauvegardeException;
-import modele.IService.IServiceCategorie;
-import modele.IService.IServicePortefeuille;
-import modele.IService.IServiceTransaction;
+import modele.iService.IServiceCategorie;
+import modele.iService.IServicePortefeuille;
+import modele.iService.IServiceTransaction;
 import vue.VueTransaction;
 
 /*

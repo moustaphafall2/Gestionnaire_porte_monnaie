@@ -1,4 +1,4 @@
-package modele.IService;
+package modele.iService;
 
 import java.time.LocalDate;
 import java.util.Map;

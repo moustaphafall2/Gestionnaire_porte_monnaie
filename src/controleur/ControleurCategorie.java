@@ -4,8 +4,8 @@ import java.util.List;
 
 import modele.enumeration.Categorie;
 import modele.exception.ErreurSauvegardeException;
-import modele.IService.IServiceCategorie;
-import modele.IService.IServicePortefeuille;
+import modele.iService.IServiceCategorie;
+import modele.iService.IServicePortefeuille;
 import vue.VueCategorie;
 
 /*

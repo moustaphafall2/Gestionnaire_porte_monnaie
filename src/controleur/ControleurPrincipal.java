@@ -1,7 +1,7 @@
 package controleur;
 
 import modele.exception.ErreurSauvegardeException;
-import modele.IService.IServicePortefeuille;
+import modele.iService.IServicePortefeuille;
 import vue.VuePrincipale;
 
 /*
