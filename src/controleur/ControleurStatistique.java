@@ -33,7 +33,8 @@ public class ControleurStatistique {
         Map<Categorie, Double> totauxParCategorie = serviceStatistique.getTotalParCategorie(debut, fin);
         vueStatistique.afficherTotauxParCategorie(totauxParCategorie);
 
-        double[] totaux = serviceStatistique.getTotalRevenusEtDepenses(debut, fin);
-        vueStatistique.afficherTotalRevenusEtDepenses(totaux[0], totaux[1]);
+        double totalRevenus = serviceStatistique.getTotalRevenus(debut, fin);
+        double totalDepenses = serviceStatistique.getTotalDepenses(debut, fin);
+        vueStatistique.afficherTotalRevenusEtDepenses(totalRevenus, totalDepenses);
     }
 }

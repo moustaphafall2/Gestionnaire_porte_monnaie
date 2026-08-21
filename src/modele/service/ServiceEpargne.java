@@ -1,13 +1,14 @@
 package modele.service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import modele.entite.Epargne;
 import modele.entite.MouvementEpargne;
 import modele.entite.Portefeuille;
 import modele.enumeration.SensMouvement;
-import modele.IService.IServiceEpargne;
+import modele.iService.IServiceEpargne;
 
 /*
     * ServiceEpargne porte désormais toutes les règles de gestion des objectifs d'épargne :
@@ -43,6 +44,27 @@ public class ServiceEpargne implements IServiceEpargne {
         return (getMontantActuel(objectif) / objectif.getMontantCible()) * 100;
     }
 
+    // Calcule le montant actuel de toute une liste d'objectifs d'un coup. Le contrôleur affichait
+    // auparavant chaque ligne dans une boucle qui appelait getMontantActuel() objectif par
+    // objectif : itérer pour calculer est un traitement, ce n'est pas le rôle d'un contrôleur.
+    // La boucle est ici, dans le service, à côté du calcul qu'elle répète.
+    public List<Double> getMontantsActuels(List<Epargne> objectifs) {
+        List<Double> montants = new ArrayList<>();
+        for (Epargne objectif : objectifs) {
+            montants.add(getMontantActuel(objectif));
+        }
+        return montants;
+    }
+
+    // Même principe que getMontantsActuels(), pour le pourcentage atteint.
+    public List<Double> getPourcentagesAtteints(List<Epargne> objectifs) {
+        List<Double> pourcentages = new ArrayList<>();
+        for (Epargne objectif : objectifs) {
+            pourcentages.add(getPourcentageAtteint(objectif));
+        }
+        return pourcentages;
+    }
+
     // Indique si une contribution de ce montant ferait dépasser le montant cible. Dépasser la
     // cible reste autorisé (règle de gestion) : c'est à l'appelant (ControleurEpargne) de
     // décider s'il signale ce dépassement avant de confirmer l'opération.
@@ -64,6 +86,14 @@ public class ServiceEpargne implements IServiceEpargne {
     // un identifiant à l'utilisateur.
     public List<Epargne> getObjectifs() {
         return servicePortefeuille.getDonnees().getObjectifs();
+    }
+
+    // Indique s'il existe au moins un objectif. Le contrôleur en a besoin pour savoir s'il a un
+    // sens de demander un identifiant à l'utilisateur après avoir affiché la liste ; sans cette
+    // méthode, il devrait inspecter lui-même la liste renvoyée par getObjectifs() (list.isEmpty()),
+    // ce qui n'est pas son rôle.
+    public boolean aAuMoinsUnObjectif() {
+        return !getObjectifs().isEmpty();
     }
 
     // Recherche publique d'un objectif par id, utilisée par ControleurEpargne pour récupérer

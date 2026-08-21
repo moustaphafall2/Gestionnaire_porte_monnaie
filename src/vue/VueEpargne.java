@@ -36,6 +36,21 @@ public class VueEpargne extends VueConsole {
                 montantActuel, objectif.getMontantCible(), pourcentageAtteint));
     }
 
+    // Traitement rapatrié depuis ControleurEpargne.afficherListeObjectifs() : tester si la liste
+    // est vide et boucler pour afficher chaque ligne sont des décisions de présentation (quel
+    // message montrer, comment parcourir pour mettre en forme), pas des règles métier. Les trois
+    // listes reçues sont déjà calculées par ServiceEpargne et vont ensemble, index par index :
+    // c'est la vue qui les assemble ligne par ligne via afficherObjectif().
+    public void afficherObjectifs(List<Epargne> objectifs, List<Double> montantsActuels, List<Double> pourcentagesAtteints) {
+        if (objectifs.isEmpty()) {
+            afficherAucunObjectif();
+            return;
+        }
+        for (int i = 0; i < objectifs.size(); i++) {
+            afficherObjectif(objectifs.get(i), montantsActuels.get(i), pourcentagesAtteints.get(i));
+        }
+    }
+
     // Détail des contributions/retraits d'un objectif. Ces mouvements ne sont jamais mélangés à
     // l'historique des transactions : ce n'est ni une dépense ni un revenu.
     public void afficherMouvements(String nomObjectif, List<MouvementEpargne> mouvements) {

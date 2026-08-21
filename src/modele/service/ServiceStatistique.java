@@ -7,7 +7,7 @@ import java.util.Map;
 import modele.entite.Transaction;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
-import modele.IService.IServiceStatistique;
+import modele.iService.IServiceStatistique;
 /*
     * ServiceStatistique calcule les statistiques du portefeuille sur une période donnée : le
     * total dépensé par catégorie, et le total des revenus et des dépenses. Déplacé depuis
@@ -47,11 +47,12 @@ public class ServiceStatistique implements IServiceStatistique {
         return totaux;
     }
 
-    // Total des revenus et des dépenses sur une période donnée.
-    // Index 0 : total des revenus. Index 1 : total des dépenses.
-    public double[] getTotalRevenusEtDepenses(LocalDate debut, LocalDate fin) {
+    // Total des revenus sur une période donnée. Séparée de getTotalDepenses() plutôt que de
+    // renvoyer les deux dans un tableau : le contrôleur recevrait alors deux valeurs indexées
+    // (totaux[0], totaux[1]) qu'il devrait lui-même extraire, ce qui est une manipulation de
+    // donnée qui n'a rien à faire dans un contrôleur.
+    public double getTotalRevenus(LocalDate debut, LocalDate fin) {
         double totalRevenus = 0;
-        double totalDepenses = 0;
 
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             LocalDate date = transaction.getDate();
@@ -60,11 +61,26 @@ public class ServiceStatistique implements IServiceStatistique {
             }
             if (transaction.getType() == TypeTransaction.REVENU) {
                 totalRevenus += transaction.getMontant();
-            } else {
+            }
+        }
+
+        return totalRevenus;
+    }
+
+    // Symétrique de getTotalRevenus(), pour les dépenses.
+    public double getTotalDepenses(LocalDate debut, LocalDate fin) {
+        double totalDepenses = 0;
+
+        for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
+            LocalDate date = transaction.getDate();
+            if (date.isBefore(debut) || date.isAfter(fin)) {
+                continue;
+            }
+            if (transaction.getType() == TypeTransaction.DEPENSE) {
                 totalDepenses += transaction.getMontant();
             }
         }
 
-        return new double[] { totalRevenus, totalDepenses };
+        return totalDepenses;
     }
 }

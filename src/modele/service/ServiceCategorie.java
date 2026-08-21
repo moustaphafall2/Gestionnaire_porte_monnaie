@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-import modele.IService.IServiceCategorie;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
+import modele.iService.IServiceCategorie;
 
 /*
     * ServiceCategorie porte les règles de gestion des catégories actives : savoir si une

@@ -71,4 +71,28 @@ public class VueCategorie extends VueConsole {
     public void afficherCategorieDesactivee() {
         afficherMessage("Catégorie désactivée.");
     }
+
+    // Traitement rapatrié depuis ControleurCategorie.gererActivationCategorie() : tester si la
+    // liste est vide et choisir quel message afficher sont des décisions de présentation, pas
+    // des règles métier. La vue renvoie directement la catégorie choisie, ou null s'il n'y a
+    // rien à proposer : le contrôleur n'a plus qu'à réagir à ce résultat.
+    public Categorie demanderCategorieActivation(List<Categorie> disponibles) {
+        if (disponibles.isEmpty()) {
+            afficherToutesActives();
+            return null;
+        }
+        return demanderCategorie(disponibles, "Numéro de la catégorie à activer : ");
+    }
+
+    // Même déplacement que demanderCategorieActivation(), pour la désactivation. La conversion
+    // Set -> List vient aussi de ControleurCategorie : il fallait une liste indexable pour
+    // numéroter les catégories à l'affichage, ce qui est un besoin d'affichage, pas une
+    // transformation de donnée métier.
+    public Categorie demanderCategorieDesactivation(Set<Categorie> actives) {
+        if (actives.isEmpty()) {
+            afficherAucuneActive();
+            return null;
+        }
+        return demanderCategorie(List.copyOf(actives), "Numéro de la catégorie à désactiver : ");
+    }
 }

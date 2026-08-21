@@ -4,8 +4,8 @@ import modele.entite.Epargne;
 import modele.entite.Portefeuille;
 import modele.entite.Transaction;
 import modele.enumeration.TypeTransaction;
+import modele.iService.IServicePortefeuille;
 import modele.persistance.GestionnaireFichier;
-import modele.IService.IServicePortefeuille;
 
 /*
     * ServicePortefeuille a trois responsabilités, et pas une de plus : détenir le
@@ -57,6 +57,14 @@ public class ServicePortefeuille implements IServicePortefeuille {
     // Utilisé par le contrôleur pour avertir l'utilisateur avant confirmation.
     public double soldeApresDepense(double montant) {
         return getSoldeDisponible() - montant;
+    }
+
+    // Règle de gestion "dépense > solde ⇒ autorisée avec avertissement" : le seuil (le calcul
+    // qui décide s'il faut avertir) est ici, dans le service, pas dans le contrôleur. Le
+    // contrôleur ne fait plus que brancher sur ce booléen, exactement comme ServiceEpargne le
+    // fait déjà pour depasseraCible().
+    public boolean depenseRendraSoldeNegatif(double montant) {
+        return soldeApresDepense(montant) < 0;
     }
 
     // Seul point d'écriture du portefeuille sur le disque. Les autres services appellent

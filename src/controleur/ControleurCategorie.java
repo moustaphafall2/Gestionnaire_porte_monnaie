@@ -1,7 +1,5 @@
 package controleur;
 
-import java.util.List;
-
 import modele.enumeration.Categorie;
 import modele.exception.ErreurSauvegardeException;
 import modele.iService.IServiceCategorie;
@@ -20,15 +18,14 @@ import vue.VueCategorie;
     * sur le disque, tant qu'il l'accepte, sans jamais rejouer l'opération elle-même. S'il
     * refuse, l'application continue normalement : ce n'est pas bloquant.
 */
-public class ControleurCategorie {
+public class ControleurCategorie extends ControleurConsole {
     private VueCategorie vueCategorie;
     private IServiceCategorie serviceCategorie;
-    private IServicePortefeuille servicePortefeuille;
 
     public ControleurCategorie(VueCategorie vueCategorie, IServiceCategorie serviceCategorie, IServicePortefeuille servicePortefeuille) {
+        super(vueCategorie, servicePortefeuille);
         this.vueCategorie = vueCategorie;
         this.serviceCategorie = serviceCategorie;
-        this.servicePortefeuille = servicePortefeuille;
     }
 
     // ----- 6. Catégories -----
@@ -49,46 +46,28 @@ public class ControleurCategorie {
         }
     }
 
+    // Traitement déplacé vers VueCategorie.demanderCategorieActivation() : vérifier si la liste
+    // des catégories disponibles est vide relève de l'affichage (quel message montrer), pas
+    // d'une règle métier. Le contrôleur ne fait plus qu'appeler un service, demander un choix
+    // à la vue, et réagir à null (rien à activer) sans jamais inspecter la liste lui-même.
     private void gererActivationCategorie() {
-        List<Categorie> disponibles = serviceCategorie.getCategoriesDisponibles();
-        if (disponibles.isEmpty()) {
-            vueCategorie.afficherToutesActives();
+        Categorie categorie = vueCategorie.demanderCategorieActivation(serviceCategorie.getCategoriesDisponibles());
+        if (categorie == null) {
             return;
         }
-
-        Categorie categorie = vueCategorie.demanderCategorie(disponibles, "Numéro de la catégorie à activer : ");
         serviceCategorie.activerCategorie(categorie);
         vueCategorie.afficherCategorieActivee();
     }
 
+    // Même principe que gererActivationCategorie() : la vue absorbe le test de liste vide et la
+    // conversion Set -> List (nécessaire pour numéroter les catégories), le contrôleur se
+    // contente d'enchaîner les appels.
     private void gererDesactivationCategorie() {
-        List<Categorie> actives = List.copyOf(serviceCategorie.getCategoriesActives());
-        if (actives.isEmpty()) {
-            vueCategorie.afficherAucuneActive();
+        Categorie categorie = vueCategorie.demanderCategorieDesactivation(serviceCategorie.getCategoriesActives());
+        if (categorie == null) {
             return;
         }
-
-        Categorie categorie = vueCategorie.demanderCategorie(actives, "Numéro de la catégorie à désactiver : ");
         serviceCategorie.desactiverCategorie(categorie);
         vueCategorie.afficherCategorieDesactivee();
-    }
-
-    // Réessaie uniquement l'écriture sur le disque, jamais l'opération elle-même : elle a déjà
-    // eu lieu en mémoire au moment où ServiceCategorie lève cette exception (voir
-    // ServicePortefeuille.sauvegarder()). Tant que l'utilisateur accepte de réessayer, on
-    // rappelle directement servicePortefeuille.sauvegarder() ; s'il refuse, l'application
-    // continue sans bloquer, avec un message clair sur les données non encore enregistrées.
-    private void confirmerNouvelleSauvegarde(ErreurSauvegardeException erreur) {
-        String messageErreur = erreur.getMessage();
-        while (vueCategorie.demanderNouvelleTentativeSauvegarde(messageErreur)) {
-            try {
-                servicePortefeuille.sauvegarder();
-                vueCategorie.afficherSauvegardeReussie();
-                return;
-            } catch (ErreurSauvegardeException nouvelleErreur) {
-                messageErreur = nouvelleErreur.getMessage();
-            }
-        }
-        vueCategorie.afficherSauvegardeAbandonnee();
     }
 }

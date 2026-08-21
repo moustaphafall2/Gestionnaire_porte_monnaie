@@ -9,7 +9,7 @@ import modele.entite.Portefeuille;
 import modele.entite.Transaction;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
-import modele.IService.IServiceTransaction;
+import modele.iService.IServiceTransaction;
 
 /*
     * ServiceTransaction porte les règles de gestion des dépenses et des revenus : ajout,

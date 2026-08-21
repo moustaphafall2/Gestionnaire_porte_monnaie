@@ -1,9 +1,7 @@
 package controleur;
 
 import java.time.LocalDate;
-import java.util.List;
 
-import modele.entite.Transaction;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
 import modele.exception.ErreurSauvegardeException;
@@ -27,18 +25,17 @@ import vue.VueTransaction;
     * (ce qui créerait un doublon ou une double suppression). S'il refuse, l'application
     * continue normalement : ce n'est pas bloquant.
 */
-public class ControleurTransaction {
+public class ControleurTransaction extends ControleurConsole {
     private VueTransaction vueTransaction;
     private IServiceTransaction serviceTransaction;
     private IServiceCategorie serviceCategorie;
-    private IServicePortefeuille servicePortefeuille;
 
     public ControleurTransaction(VueTransaction vueTransaction, IServiceTransaction serviceTransaction,
             IServiceCategorie serviceCategorie, IServicePortefeuille servicePortefeuille) {
+        super(vueTransaction, servicePortefeuille);
         this.vueTransaction = vueTransaction;
         this.serviceTransaction = serviceTransaction;
         this.serviceCategorie = serviceCategorie;
-        this.servicePortefeuille = servicePortefeuille;
     }
 
     // ----- 2. Ajouter une dépense -----
@@ -56,11 +53,11 @@ public class ControleurTransaction {
 
         vueTransaction.afficherRecapitulatif(montant, categorie, date);
 
-        // Règle de gestion : une dépense supérieure au solde disponible est autorisée, avec un
-        // simple avertissement (une dépense passée est un fait).
-        double soldeApres = servicePortefeuille.soldeApresDepense(montant);
-        if (soldeApres < 0) {
-            vueTransaction.afficherAvertissementSoldeNegatif(soldeApres);
+        // Règle de gestion "dépense > solde ⇒ avertissement" : le seuil est calculé par
+        // ServicePortefeuille.depenseRendraSoldeNegatif(), pas ici. Le contrôleur ne fait que
+        // brancher sur ce booléen, comme il le fait déjà pour ServiceEpargne.depasseraCible().
+        if (servicePortefeuille.depenseRendraSoldeNegatif(montant)) {
+            vueTransaction.afficherAvertissementSoldeNegatif(servicePortefeuille.soldeApresDepense(montant));
         }
 
         if (!vueTransaction.confirmer("Confirmer l'enregistrement de cette dépense ?")) {
@@ -106,30 +103,25 @@ public class ControleurTransaction {
 
     // ----- 4. Historique -----
 
+    // Chaque branche appelle directement vueTransaction.afficherTransactions() avec son propre
+    // résultat, plutôt que de le stocker dans une variable commune affichée après le switch : le
+    // résultat ne doit pas être assemblé par le contrôleur, chaque branche se suffit à elle-même.
     public void gererHistorique() {
         vueTransaction.afficherMenuHistorique();
         int choix = vueTransaction.lireEntier("Votre choix : ");
 
-        List<Transaction> resultat;
         switch (choix) {
-            case 1 -> resultat = serviceTransaction.getHistorique();
+            case 1 -> vueTransaction.afficherTransactions(serviceTransaction.getHistorique());
             case 2 -> {
                 LocalDate debut = vueTransaction.lireDate("Date de début (JJ/MM/AAAA) : ");
                 LocalDate fin = vueTransaction.lireDate("Date de fin (JJ/MM/AAAA) : ");
-                resultat = serviceTransaction.filtrerParDate(debut, fin);
+                vueTransaction.afficherTransactions(serviceTransaction.filtrerParDate(debut, fin));
             }
-            case 3 -> resultat = serviceTransaction.filtrerParCategorie(vueTransaction.demanderCategorieParmiToutes());
-            case 4 -> resultat = serviceTransaction.filtrerParType(vueTransaction.demanderType());
-            case 5 -> {
-                gererModificationSuppressionTransaction();
-                return;
-            }
-            default -> {
-                return;
-            }
+            case 3 -> vueTransaction.afficherTransactions(serviceTransaction.filtrerParCategorie(vueTransaction.demanderCategorieParmiToutes()));
+            case 4 -> vueTransaction.afficherTransactions(serviceTransaction.filtrerParType(vueTransaction.demanderType()));
+            case 5 -> gererModificationSuppressionTransaction();
+            default -> { }
         }
-
-        vueTransaction.afficherTransactions(resultat);
     }
 
     private void gererModificationSuppressionTransaction() {
@@ -174,24 +166,5 @@ public class ControleurTransaction {
         } catch (IllegalArgumentException | IllegalStateException erreur) {
             vueTransaction.afficherErreur(erreur.getMessage());
         }
-    }
-
-    // Réessaie uniquement l'écriture sur le disque, jamais l'opération elle-même : elle a déjà
-    // eu lieu en mémoire au moment où IServiceTransaction lève cette exception (voir
-    // IServicePortefeuille.sauvegarder()). Tant que l'utilisateur accepte de réessayer, on
-    // rappelle directement servicePortefeuille.sauvegarder() ; s'il refuse, l'application
-    // continue sans bloquer, avec un message clair sur les données non encore enregistrées.
-    private void confirmerNouvelleSauvegarde(ErreurSauvegardeException erreur) {
-        String messageErreur = erreur.getMessage();
-        while (vueTransaction.demanderNouvelleTentativeSauvegarde(messageErreur)) {
-            try {
-                servicePortefeuille.sauvegarder();
-                vueTransaction.afficherSauvegardeReussie();
-                return;
-            } catch (ErreurSauvegardeException nouvelleErreur) {
-                messageErreur = nouvelleErreur.getMessage();
-            }
-        }
-        vueTransaction.afficherSauvegardeAbandonnee();
     }
 }

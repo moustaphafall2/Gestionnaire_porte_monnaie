@@ -23,15 +23,14 @@ import vue.VueEpargne;
     * sur le disque, tant qu'il l'accepte, sans jamais rejouer l'opération elle-même. S'il
     * refuse, l'application continue normalement : ce n'est pas bloquant.
 */
-public class ControleurEpargne {
+public class ControleurEpargne extends ControleurConsole {
     private VueEpargne vueEpargne;
     private IServiceEpargne serviceEpargne;
-    private IServicePortefeuille servicePortefeuille;
 
     public ControleurEpargne(VueEpargne vueEpargne, IServiceEpargne serviceEpargne, IServicePortefeuille servicePortefeuille) {
+        super(vueEpargne, servicePortefeuille);
         this.vueEpargne = vueEpargne;
         this.serviceEpargne = serviceEpargne;
-        this.servicePortefeuille = servicePortefeuille;
     }
 
     // ----- 5. Objectifs d'épargne -----
@@ -116,12 +115,13 @@ public class ControleurEpargne {
 
     private void gererConsultationObjectifs() {
         afficherListeObjectifs();
-        if (!serviceEpargne.getObjectifs().isEmpty()) {
-            int id = vueEpargne.lireEntier("Identifiant de l'objectif à détailler (0 pour revenir) : ");
-            if (id != 0) {
-                Epargne objectif = serviceEpargne.getObjectif(id);
-                vueEpargne.afficherMouvements(objectif.getNom(), objectif.getMouvements());
-            }
+        if (!serviceEpargne.aAuMoinsUnObjectif()) {
+            return;
+        }
+        int id = vueEpargne.lireEntier("Identifiant de l'objectif à détailler (0 pour revenir) : ");
+        if (id != 0) {
+            Epargne objectif = serviceEpargne.getObjectif(id);
+            vueEpargne.afficherMouvements(objectif.getNom(), objectif.getMouvements());
         }
     }
 
@@ -136,36 +136,13 @@ public class ControleurEpargne {
         }
     }
 
-    // Affiche chaque objectif avec sa progression. Le montant actuel et le pourcentage atteint
-    // viennent tous les deux de ServiceEpargne : ce contrôleur ne fait que les transmettre à la
-    // vue, jamais de calcul sur les mouvements ou les montants.
+    // Récupère la liste des objectifs et la transmet entière à VueEpargne.afficherObjectifs(),
+    // avec les montants actuels et pourcentages atteints déjà calculés par ServiceEpargne pour
+    // toute la liste. Ni boucle ni test de liste vide ici : les deux sont dans la vue. Un appelant
+    // qui a besoin de savoir s'il existe au moins un objectif (gererConsultationObjectifs)
+    // interroge serviceEpargne.aAuMoinsUnObjectif() plutôt que d'inspecter une liste renvoyée ici.
     private void afficherListeObjectifs() {
         List<Epargne> objectifs = serviceEpargne.getObjectifs();
-        if (objectifs.isEmpty()) {
-            vueEpargne.afficherAucunObjectif();
-            return;
-        }
-        for (Epargne objectif : objectifs) {
-            vueEpargne.afficherObjectif(objectif, serviceEpargne.getMontantActuel(objectif), serviceEpargne.getPourcentageAtteint(objectif));
-        }
-    }
-
-    // Réessaie uniquement l'écriture sur le disque, jamais l'opération elle-même : elle a déjà
-    // eu lieu en mémoire au moment où ServiceEpargne lève cette exception (voir
-    // ServicePortefeuille.sauvegarder()). Tant que l'utilisateur accepte de réessayer, on
-    // rappelle directement servicePortefeuille.sauvegarder() ; s'il refuse, l'application
-    // continue sans bloquer, avec un message clair sur les données non encore enregistrées.
-    private void confirmerNouvelleSauvegarde(ErreurSauvegardeException erreur) {
-        String messageErreur = erreur.getMessage();
-        while (vueEpargne.demanderNouvelleTentativeSauvegarde(messageErreur)) {
-            try {
-                servicePortefeuille.sauvegarder();
-                vueEpargne.afficherSauvegardeReussie();
-                return;
-            } catch (ErreurSauvegardeException nouvelleErreur) {
-                messageErreur = nouvelleErreur.getMessage();
-            }
-        }
-        vueEpargne.afficherSauvegardeAbandonnee();
+        vueEpargne.afficherObjectifs(objectifs, serviceEpargne.getMontantsActuels(objectifs), serviceEpargne.getPourcentagesAtteints(objectifs));
     }
 }

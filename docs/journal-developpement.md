@@ -1403,3 +1403,260 @@ Deux erreurs de compilation réelles, corrigées après coup :
 
 Rien pour cette étape précise. La suppression de `Menu.java` reste la seule tâche en attente,
 inchangée depuis l'entrée précédente.
+
+## 2026-08-21 — Contrôleurs sans traitement (1/3) : `ControleurCategorie`
+
+Consigne de la maîtresse de stage : un contrôleur ne doit faire que des appels de méthode —
+aucune boucle, aucune construction ou transformation de liste, aucune correspondance entre un
+numéro saisi et un objet, aucun `if` portant sur une règle métier. Relevé d'abord sur
+`ControleurCategorie`, à vérifier ensuite sur les quatre autres contrôleurs.
+
+### Ce qui a été écrit
+
+- **`VueCategorie`** : deux méthodes, `demanderCategorieActivation(List<Categorie>)` et
+  `demanderCategorieDesactivation(Set<Categorie>)`. Chacune teste si la liste/l'ensemble reçu
+  est vide (et affiche alors le message dédié, en renvoyant `null`), sinon délègue à
+  `demanderCategorie(...)`, déjà existante, pour numéroter et lire le choix.
+- **`ControleurCategorie`** : `gererActivationCategorie()` et `gererDesactivationCategorie()`
+  réduites à un appel à la nouvelle méthode de vue, un test `if (categorie == null) return;`, et
+  les deux appels de service déjà en place. L'import `java.util.List`, plus utilisé, a été
+  retiré.
+- **Correction sans rapport avec cette étape** : les cinq classes de `modele.service`
+  importaient encore `modele.IService.IServiceXxx` (majuscule), reliquat du renommage de paquet
+  `IService` → `iService` fait au commit précédent mais jamais répercuté sur ces imports. La
+  compilation ne passait plus du tout. Corrigé en réalignant les cinq imports sur le nom réel du
+  paquet.
+
+### Choix de conception
+
+**Pourquoi le test de liste vide et la conversion `Set` → `List` partent dans la vue plutôt que
+de rester dans le contrôleur.** Décider quel message afficher selon qu'une liste est vide ou non
+est une décision de présentation, pas une règle de gestion sur les catégories ou l'argent.
+Convertir un `Set` en `List` pour pouvoir numéroter les catégories à l'écran est un besoin
+d'affichage (il faut un ordre indexable), pas une transformation de donnée métier. Les deux
+n'avaient donc rien à faire dans le contrôleur.
+
+**Pourquoi la vue renvoie `null` plutôt qu'un indice ou une exception.** Le principe donné pour
+cette étape : "une vue qui propose une liste doit renvoyer l'objet choisi, pas un indice que le
+contrôleur devrait convertir". Pour le cas où il n'y a rien à choisir, `null` est le signal le
+plus simple — il existe déjà un précédent dans le projet (`VueEpargne.lireDateLimite` renvoie
+`null` pour "pas de date saisie"). Le contrôleur n'a plus qu'à réagir à ce résultat avec un test
+de nullité, qui n'est pas une règle métier : c'est une réaction à une décision déjà prise par la
+vue, pas une inspection de liste faite par le contrôleur lui-même.
+
+### Points à savoir défendre
+
+- **Le `if (categorie == null) return;` qui reste dans le contrôleur n'est-il pas lui-même un
+  traitement ?** Non : il ne construit rien, ne parcourt rien, ne compare aucune valeur métier.
+  C'est une réaction à un résultat déjà tranché par la vue, comme un `if (choix == 1)` réagit à
+  un menu déjà affiché.
+- **Pourquoi avoir corrigé les imports de `modele.service` dans la même étape, alors que ce
+  n'était pas demandé ?** Sans cette correction, plus rien ne compilait, y compris le travail sur
+  `ControleurCategorie` : impossible de vérifier quoi que ce soit sans lever ce blocage d'abord.
+
+### Pièges rencontrés
+
+Le renommage de paquet `IService` → `iService` du commit précédent n'avait mis à jour que le
+`package` déclaré dans les cinq interfaces elles-mêmes, pas les `import` des cinq classes de
+service qui les implémentent. Sur un système de fichiers sensible à la casse (Linux), `javac`
+refusait de trouver `modele.IService` : "package modele.IService does not exist". Pas détecté au
+commit précédent faute d'avoir recompilé après le renommage.
+
+### Reste à faire
+
+`ControleurTransaction` et `ControleurEpargne`, dans cet ordre, pour le même nettoyage.
+
+## 2026-08-21 — Contrôleurs sans traitement (2/3 et 3/3) : `ControleurConsole`, `ControleurTransaction`, `ControleurEpargne`
+
+Deuxième relecture, avec un critère plus strict donné par l'étudiant après la première passe :
+toute ligne qui n'est ni un appel de méthode, ni une affectation du résultat d'un appel, ni un
+aiguillage de menu (boucle de menu, `switch` de choix, `if (id == 0)`), est un traitement à
+sortir du contrôleur. Cette relecture a fait remonter un traitement manqué à l'étape précédente :
+la boucle de reprise après échec de sauvegarde (`confirmerNouvelleSauvegarde`), identique dans
+`ControleurCategorie`, `ControleurTransaction` et `ControleurEpargne`.
+
+### Ce qui a été écrit
+
+- **`ControleurConsole`** (nouvelle classe, `controleur`) : porte désormais la seule
+  `confirmerNouvelleSauvegarde(ErreurSauvegardeException)`, écrite une fois. `ControleurCategorie`,
+  `ControleurTransaction` et `ControleurEpargne` en héritent tous les trois et n'écrivent plus
+  cette boucle chacun de leur côté — même principe que `VueConsole` côté vue.
+- **`ServicePortefeuille`** : une méthode, `depenseRendraSoldeNegatif(double montant)`, qui
+  calcule le seuil de la règle "dépense > solde ⇒ avertissement". `ControleurTransaction` ne fait
+  plus la comparaison `soldeApres < 0` lui-même, il branche sur ce booléen — même patron que
+  `ServiceEpargne.depasseraCible()`, qui existait déjà.
+- **`ServiceEpargne`** : deux méthodes, `getMontantsActuels(List<Epargne>)` et
+  `getPourcentagesAtteints(List<Epargne>)`, qui calculent la progression de toute une liste
+  d'objectifs d'un coup (une boucle chacune, à l'intérieur du service).
+- **`VueEpargne`** : une méthode, `afficherObjectifs(List<Epargne>, List<Double>, List<Double>)`,
+  qui reçoit les trois listes déjà calculées, teste si la liste d'objectifs est vide, et boucle
+  pour afficher chaque ligne via `afficherObjectif()` (déjà existante).
+- **`ControleurTransaction`** : hérite de `ControleurConsole` (retire sa propre
+  `confirmerNouvelleSauvegarde` et son champ `servicePortefeuille`, devenu hérité). Dans
+  `gererAjouterDepense()`, le test devient `if (servicePortefeuille.depenseRendraSoldeNegatif(montant))`.
+- **`ControleurEpargne`** : hérite de `ControleurConsole` (mêmes retraits qu'au-dessus).
+  `afficherListeObjectifs()` ne boucle plus et ne teste plus la liste vide : elle appelle
+  `vueEpargne.afficherObjectifs(...)` avec les trois listes, et renvoie la liste des objectifs
+  (type de retour `void` → `List<Epargne>`). `gererConsultationObjectifs()` réutilise cette liste
+  renvoyée au lieu de rappeler `serviceEpargne.getObjectifs()` une deuxième fois rien que pour
+  retester si elle est vide.
+- **`ControleurCategorie`** : hérite lui aussi de `ControleurConsole` (même retrait qu'au-dessus),
+  en plus du nettoyage déjà fait à l'étape précédente.
+- **`IServicePortefeuille`**, **`IServiceEpargne`** : les nouvelles méthodes publiques des
+  services correspondants y sont ajoutées, comme pour toute méthode publique de service.
+
+### Choix de conception
+
+**Pourquoi la boucle de reprise ne pouvait pas descendre plus bas que le contrôleur.** Elle
+alterne deux natures d'appel : poser une question (la vue) et retenter l'écriture (le service).
+La faire porter par `ServicePortefeuille` aurait obligé le service à appeler une vue — une classe
+de `modele` qui dépend d'une classe de `vue`, ce que l'architecture MVC du projet interdit
+justement (le test du CLAUDE.md : "si je remplace la console par une interface graphique, est-ce
+que je dois toucher à cette classe ?" — oui, pour un service qui appellerait une vue). La faire
+porter par la vue aurait obligé la vue à appeler un service, ce que la règle du projet interdit
+explicitement et sans exception. Le contrôleur reste donc le seul endroit possible pour cette
+boucle précise ; ce qui a changé, c'est qu'elle n'est plus recopiée trois fois.
+
+**Pourquoi `ControleurConsole` plutôt que, par exemple, passer `VueConsole` et
+`IServicePortefeuille` en paramètres d'une méthode statique.** Une méthode statique partagée
+existe déjà dans le projet pour un besoin comparable (`CalculEpargne`), mais elle sert un calcul
+pur, sans appel à une vue ni effet de bord. Ici, il fallait un mécanisme hérité par plusieurs
+contrôleurs, exactement comme `VueConsole` l'est déjà par plusieurs vues : le même patron des
+deux côtés de l'architecture, plus simple à expliquer que d'introduire une deuxième façon de
+partager du code.
+
+**Pourquoi `getMontantsActuels`/`getPourcentagesAtteints` renvoient deux `List<Double>` plutôt
+qu'un nouveau type qui regrouperait objectif, montant et pourcentage.** Décidé avec l'étudiant :
+pas de nouveau type. Deux listes qui avancent au même index sont plus simples à lire et à
+défendre que d'introduire une classe supplémentaire pour ce seul écran, même si l'association
+entre les trois listes n'est pas imposée par le type — elle est assurée par construction
+(`getMontantsActuels`/`getPourcentagesAtteints` parcourent la même liste `objectifs` reçue en
+paramètre, dans le même ordre).
+
+### Points à savoir défendre
+
+- **Comment as-tu tracé la limite entre "aiguillage acceptable dans un contrôleur" et
+  "traitement à en sortir" ?** Un `if` reste dans le contrôleur quand il ne fait que réagir à un
+  résultat déjà entièrement calculé ailleurs : un choix de menu, un `null`/`id == 0` signalant
+  "rien à faire", une confirmation oui/non de l'utilisateur, ou un booléen renvoyé par un service
+  (`depasseraCible`, `depenseRendraSoldeNegatif`, `aCategorieActiveDeType`). Un `if` sort du
+  contrôleur dès qu'il inspecte lui-même une donnée pour en tirer une décision (une liste vide,
+  une comparaison de montant) : c'est le service ou la vue qui doit trancher, pas lui.
+- **`gererConsultationObjectifs()` teste encore `objectifs.isEmpty()` — n'est-ce pas la même
+  chose que ce qui vient d'être sorti d'`afficherListeObjectifs()` ?** Ce n'est pas une nouvelle
+  inspection : c'est la liste déjà récupérée par l'appel précédent, réutilisée pour décider si la
+  suite de l'écran (demander un identifiant) a un sens. C'est la même famille que `if (id == 0)` :
+  une garde de flux, pas un calcul sur les données.
+- **Pourquoi avoir touché `ServicePortefeuille` et `ServiceEpargne` alors que la consigne ne
+  parlait que des contrôleurs ?** Parce que sortir un traitement d'un contrôleur veut toujours
+  dire le faire atterrir quelque part : sur une donnée calculée (ici, un seuil et deux
+  progressions), la destination est le service, pas la vue.
+
+### Pièges rencontrés
+
+Aucun cette fois — chaque étape a été vérifiée par une compilation complète avant de passer à la
+suivante.
+
+### Reste à faire
+
+Les cinq contrôleurs respectent maintenant le critère "aiguillage seulement". Reste toujours la
+suppression de `Menu.java`, inchangée depuis les entrées précédentes.
+
+## 2026-08-21 — Contrôleurs sans traitement, dernière passe : critère à quatre catégories
+
+Troisième et dernière relecture, avec un critère formulé sans ambiguïté par l'étudiant : dans un
+contrôleur, une ligne n'est acceptée que si elle est (1) un appel de méthode sur une vue ou un
+service, (2) une affectation qui reçoit directement le résultat d'un tel appel, (3) un `if`/`switch`
+qui réagit à une valeur déjà obtenue d'un appel (choix de menu, booléen de service, confirmation,
+résultat `null`), ou (4) la boucle du menu principal. Tout le reste — regarder dans une
+collection, la parcourir, indexer un tableau, comparer des valeurs, calculer — est un traitement.
+Cette relecture a fait remonter trois derniers cas, plus un quatrième examiné et jugé
+indéplaçable.
+
+### Ce qui a été écrit
+
+- **`ServiceEpargne`** : une méthode, `aAuMoinsUnObjectif()`, qui renvoie
+  `!getObjectifs().isEmpty()`. `ControleurEpargne.gererConsultationObjectifs()` teste ce booléen
+  au lieu d'appeler `.isEmpty()` sur une liste qu'il aurait dû recevoir puis inspecter lui-même.
+  `afficherListeObjectifs()` redevient `void` : elle n'a plus besoin de renvoyer sa liste à qui
+  que ce soit.
+- **`ServiceStatistique`** : `getTotalRevenusEtDepenses(...)`, qui renvoyait un `double[]`, est
+  remplacée par deux méthodes séparées, `getTotalRevenus(...)` et `getTotalDepenses(...)`.
+  `ControleurStatistique` ne fait plus `totaux[0]`/`totaux[1]` : indexer un tableau, c'est
+  manipuler une donnée, ce qui n'a rien à faire dans un contrôleur.
+- **`ControleurTransaction.gererHistorique()`** : la variable `resultat`, remplie dans quatre
+  branches du `switch` puis affichée après coup, a disparu. Chaque branche appelle maintenant
+  directement `vueTransaction.afficherTransactions(...)` avec son propre résultat.
+- **`ControleurConsole.confirmerNouvelleSauvegarde`** : examinée pour savoir si elle pouvait
+  sortir du contrôleur. Conclusion : non, et le commentaire de la classe documente maintenant
+  précisément pourquoi (voir "Choix de conception"). Aucun changement de code sur cette méthode
+  elle-même, seulement sur son commentaire.
+- **`IServiceEpargne`**, **`IServiceStatistique`** : mises à jour avec les nouvelles/nouvelles
+  signatures de méthodes publiques.
+
+### Choix de conception
+
+**Pourquoi `aAuMoinsUnObjectif()` plutôt que de laisser `afficherListeObjectifs()` renvoyer la
+liste.** La version précédente (étape du 2/3) faisait déjà un compromis : elle évitait de
+recalculer la liste, mais obligeait le contrôleur à faire `objectifs.isEmpty()` sur ce qu'elle
+renvoyait — une inspection de collection, même sur une liste déjà en main. Le critère de cette
+étape ne laisse plus cette marge : le contrôleur ne doit jamais regarder dans une collection, même
+la sienne. La solution retenue redonne la décision au service, sous forme d'un booléen tout fait,
+au prix d'un deuxième appel à `getObjectifs()` en interne (une fois dans `afficherListeObjectifs()`,
+une fois dans `aAuMoinsUnObjectif()`) — un coût négligeable pour une liste d'objectifs d'épargne
+d'un usage personnel, largement compensé par la clarté de la règle : le contrôleur ne fait jamais
+`.isEmpty()`, point final.
+
+**Pourquoi `getTotalRevenusEtDepenses()` a disparu plutôt que de garder le tableau et de le
+transmettre tel quel à la vue.** Une des deux solutions proposées à l'étudiant. Transmettre le
+tableau tel quel aurait voulu dire changer la signature de
+`VueStatistique.afficherTotalRevenusEtDepenses(double, double)` en
+`afficherTotalRevenusEtDepenses(double[])`, ce qui aurait déplacé le problème dans la vue au lieu
+de le résoudre : la vue aurait dû, elle, indexer `totaux[0]`/`totaux[1]` pour construire ses deux
+lignes de texte. Deux méthodes de service séparées, chacune renvoyant une seule valeur, évitent le
+tableau des deux côtés.
+
+**La boucle de reprise sur échec de sauvegarde, dernière vraie boucle de traitement du projet :
+pourquoi elle reste dans `ControleurConsole`.** Réexaminée sérieusement à la demande explicite de
+l'étudiant, avec obligation de répondre clairement si aucun déplacement n'était possible. Elle
+alterne deux natures d'appel à chaque tour : poser une question (capacité d'une vue) et retenter
+l'écriture (capacité d'un service), avec une décision différente selon la réponse de chacun. Trois
+pistes examinées et écartées : la faire porter par `ServicePortefeuille` (un service qui
+appellerait une vue, ce que la règle 1 du CLAUDE.md interdit déjà pour l'affichage/la saisie
+directs, et que le test "remplacer la console par une IHM graphique" condamnerait) ; la faire
+porter par la vue (une vue qui appellerait un service, interdit sans exception par la règle 2) ;
+confier la retentative au service via un objet passé en paramètre — un mécanisme de rappel, qui
+n'existe pas en Java de base sans lambda, classe anonyme ou interface fonctionnelle dédiée, exactement
+ce que le CLAUDE.md interdit sans accord préalable. Seul un contrôleur a le droit d'appeler à la
+fois une vue et un service : cette boucle n'a donc pas d'autre endroit possible dans cette
+architecture. Ce qui pouvait être amélioré l'avait déjà été à l'étape précédente (elle n'est plus
+écrite trois fois) ; ce qui reste ne l'est pas par oubli, mais par nécessité.
+
+### Points à savoir défendre
+
+- **Le contrôleur ne fait-il vraiment plus jamais `liste.isEmpty()` nulle part ?** Vérifié sur les
+  cinq contrôleurs après cette étape : le seul test qui restait
+  (`gererConsultationObjectifs`) est remplacé par un appel à
+  `serviceEpargne.aAuMoinsUnObjectif()`.
+  Aucune collection n'est plus inspectée, parcourue, ni indexée dans `controleur`.
+- **`ControleurConsole.confirmerNouvelleSauvegarde` n'est-elle pas la preuve que le critère "un
+  contrôleur n'enchaîne que des appels" a une limite ?** Non : la boucle *est* un enchaînement
+  d'appels (poser la question, tenter la sauvegarde, poser la question à nouveau...), simplement
+  répété conditionnellement. Ce n'est ni un calcul, ni un parcours de collection métier, ni une
+  règle de gestion — les trois choses que le critère vise à sortir des contrôleurs.
+- **Pourquoi ne pas avoir demandé la permission d'utiliser une interface fonctionnelle (un
+  callback) pour sortir complètement cette boucle ?** Parce que la question a été posée à
+  l'envers : introduire un mécanisme de rappel aurait ajouté de la complexité (une nouvelle
+  notion, un nouveau type) pour un gain douteux — la boucle resterait quelque part, simplement
+  écrite différemment, pour un concept plus difficile à défendre à l'oral qu'une boucle `while`
+  ordinaire.
+
+### Pièges rencontrés
+
+Aucun — chaque changement a été vérifié par une compilation complète.
+
+### Reste à faire
+
+Les cinq contrôleurs sont maintenant conformes au critère à quatre catégories, y compris son seul
+cas limite documenté (`ControleurConsole`). Reste toujours la suppression de `Menu.java`,
+inchangée depuis les entrées précédentes.
