@@ -4,8 +4,8 @@ import java.util.List;
 
 import modele.enumeration.Categorie;
 import modele.exception.ErreurSauvegardeException;
-import modele.service.ServiceCategorie;
-import modele.service.ServicePortefeuille;
+import modele.IService.IServiceCategorie;
+import modele.IService.IServicePortefeuille;
 import vue.VueCategorie;
 
 /*
@@ -22,10 +22,10 @@ import vue.VueCategorie;
 */
 public class ControleurCategorie {
     private VueCategorie vueCategorie;
-    private ServiceCategorie serviceCategorie;
-    private ServicePortefeuille servicePortefeuille;
+    private IServiceCategorie serviceCategorie;
+    private IServicePortefeuille servicePortefeuille;
 
-    public ControleurCategorie(VueCategorie vueCategorie, ServiceCategorie serviceCategorie, ServicePortefeuille servicePortefeuille) {
+    public ControleurCategorie(VueCategorie vueCategorie, IServiceCategorie serviceCategorie, IServicePortefeuille servicePortefeuille) {
         this.vueCategorie = vueCategorie;
         this.serviceCategorie = serviceCategorie;
         this.servicePortefeuille = servicePortefeuille;

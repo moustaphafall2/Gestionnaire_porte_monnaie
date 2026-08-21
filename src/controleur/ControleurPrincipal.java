@@ -1,7 +1,7 @@
 package controleur;
 
 import modele.exception.ErreurSauvegardeException;
-import modele.service.ServicePortefeuille;
+import modele.IService.IServicePortefeuille;
 import vue.VuePrincipale;
 
 /*
@@ -13,13 +13,13 @@ import vue.VuePrincipale;
 */
 public class ControleurPrincipal {
     private VuePrincipale vuePrincipale;
-    private ServicePortefeuille servicePortefeuille;
+    private IServicePortefeuille servicePortefeuille;
     private ControleurTransaction controleurTransaction;
     private ControleurEpargne controleurEpargne;
     private ControleurCategorie controleurCategorie;
     private ControleurStatistique controleurStatistique;
 
-    public ControleurPrincipal(VuePrincipale vuePrincipale, ServicePortefeuille servicePortefeuille,
+    public ControleurPrincipal(VuePrincipale vuePrincipale, IServicePortefeuille servicePortefeuille,
             ControleurTransaction controleurTransaction, ControleurEpargne controleurEpargne,
             ControleurCategorie controleurCategorie, ControleurStatistique controleurStatistique) {
         this.vuePrincipale = vuePrincipale;

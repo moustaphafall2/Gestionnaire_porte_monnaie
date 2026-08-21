@@ -1315,3 +1315,91 @@ absence de fichier `.tmp` résiduel après une sauvegarde réussie, et caractèr
 Les sept écrans du menu principal sont migrés, la persistance est maintenant sûre. Il ne reste
 que la suppression de `Menu.java`, devenue entièrement sans usage (à faire sur demande, pas
 avant).
+
+## 2026-08-21 — Interfaces de service (`modele.IService`) et contrôleurs typés sur les interfaces
+
+Étape codée directement par l'étudiant (changement de méthode de travail demandé pour cette
+étape) : l'assistant a fourni les signatures exactes à reproduire et relu le résultat, sans
+écrire de fichier lui-même.
+
+### Ce qui a été écrit
+
+- **`modele.IService`** (nouveau paquet) : cinq interfaces, une par service —
+  `IServiceCategorie`, `IServiceEpargne`, `IServicePortefeuille`, `IServiceStatistique`,
+  `IServiceTransaction`. Chacune déclare exactement les méthodes publiques déjà existantes du
+  service correspondant, recopiées telles quelles, sans ajout ni omission volontaire.
+- **Les cinq classes de service** (`ServiceCategorie`, `ServiceEpargne`, `ServicePortefeuille`,
+  `ServiceStatistique`, `ServiceTransaction`) déclarent désormais `implements IServiceXxx`, sans
+  aucun changement de comportement.
+- **Les cinq contrôleurs** (`ControleurCategorie`, `ControleurEpargne`, `ControleurPrincipal`,
+  `ControleurStatistique`, `ControleurTransaction`) déclarent maintenant leurs champs et leurs
+  paramètres de constructeur avec le type de l'interface (`IServiceTransaction` au lieu de
+  `ServiceTransaction`, etc.) plutôt qu'avec la classe concrète.
+- **`Main.java`** : aucune modification. Il continue d'instancier les classes concrètes
+  (`new ServiceTransaction(...)`) ; Java accepte de les passer à un constructeur qui attend le
+  type interface, puisque chaque classe l'implémente.
+
+### Choix de conception
+
+**Pourquoi une interface par service plutôt qu'une seule interface commune.** Chaque service a
+un contrat différent (les méthodes de `IServiceEpargne` n'ont rien à voir avec celles de
+`IServiceStatistique`) ; une interface unique n'aurait rien décrit de précis et aurait forcé
+chaque service à "implémenter" des méthodes qui ne le concernent pas.
+
+**Pourquoi `estActive` (`ServiceCategorie`) et `getDonnees` (`ServicePortefeuille`) ne figurent
+dans aucune interface.** Les deux sont à visibilité de paquet dans leur classe (aucun
+modificateur), utilisables uniquement par les autres services de `modele.service` — c'est la
+protection documentée à l'entrée du 2026-08-19 contre le contournement des services depuis un
+contrôleur. Une méthode d'interface Java est toujours implicitement publique : l'écrire dans
+l'interface aurait forcé la méthode à devenir `public` dans la classe (Java interdit de
+restreindre la visibilité d'une méthode en l'implémentant), et donc rouvert exactement le trou
+que la visibilité de paquet avait fermé. Les deux méthodes existent toujours, simplement en
+dehors du contrat public.
+
+**Pourquoi `Main.java` n'a rien à changer.** Le typage par interface ne concerne que la façon
+dont un contrôleur *déclare* sa dépendance, pas la façon dont l'objet est construit. `Main` reste
+le seul endroit qui sait quelle implémentation concrète existe ; les contrôleurs, eux, n'en ont
+plus besoin de le savoir.
+
+### Points à savoir défendre
+
+- **Qu'est-ce qu'une interface apporte concrètement ici, par rapport à avant ?** Un contrôleur
+  qui déclare `IServiceTransaction serviceTransaction` ne peut appeler que les méthodes du
+  contrat — jamais une méthode interne comme `trouverTransaction`, qui n'existe pas dans
+  l'interface. La frontière entre "ce qu'un contrôleur peut faire" et "détail d'implémentation du
+  service" est vérifiée par le compilateur, pas seulement par une convention.
+- **Pourquoi une interface Java ne peut-elle pas déclarer de méthode `private` sans corps ?**
+  `private` sur une méthode d'interface n'existe que depuis Java 9, et uniquement pour une
+  méthode qui a un corps (un utilitaire interne partagé entre les méthodes `default`/`static` de
+  l'interface elle-même). Une méthode abstraite (sans corps, à implémenter) est toujours
+  publique : `private boolean estVide(Epargne objectif);` ne compile pas, message du compilateur
+  "missing method body, or declare abstract". C'est pour ça que les méthodes privées des services
+  (`estVide`, `trouverTransaction`, `validerCategorieActive`...) ne peuvent de toute façon pas
+  apparaître dans une interface, indépendamment de la question d'encapsulation.
+- **Le paquet s'appelle `IService` et non `eService` comme demandé au départ — est-ce un
+  problème ?** Non, c'est un renommage assumé par l'étudiant en cours de route ; le contenu (une
+  interface par service, limitée aux méthodes publiques) respecte la consigne, seul le nom du
+  paquet et le préfixe des interfaces diffèrent.
+
+### Pièges rencontrés
+
+Deux erreurs de compilation réelles, corrigées après coup :
+
+- **Import incohérent avec le paquet créé** : `ServiceCategorie.java` importait
+  `modele.eService.EServiceCategorie` (nom prévu initialement) alors que le paquet réellement
+  créé était `modele.IService.IServiceCategorie`. Message du compilateur : "package
+  modele.eService does not exist". Corrigé en alignant l'import et le nom d'interface sur ce qui
+  existait vraiment sur le disque.
+- **Méthodes privées recopiées telles quelles dans les interfaces** : `estVide`,
+  `validerCategorieActive` et `trouverTransaction` avaient d'abord été ajoutées à
+  `IServiceEpargne`/`IServiceTransaction` avec leur modificateur `private` d'origine, sans corps
+  — erreur "missing method body, or declare abstract" (voir ci-dessus). Retirées des interfaces,
+  laissées uniquement dans les classes.
+- **`estActive` et `getDonnees` brièvement rendues publiques** pour satisfaire une première
+  version des interfaces qui les incluait. Repéré avant la validation finale et corrigé : les
+  deux méthodes sont revenues à leur visibilité de paquet d'origine, retirées des interfaces.
+
+### Reste à faire
+
+Rien pour cette étape précise. La suppression de `Menu.java` reste la seule tâche en attente,
+inchangée depuis l'entrée précédente.

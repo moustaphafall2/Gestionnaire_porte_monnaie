@@ -5,8 +5,8 @@ import java.util.List;
 
 import modele.entite.Epargne;
 import modele.exception.ErreurSauvegardeException;
-import modele.service.ServiceEpargne;
-import modele.service.ServicePortefeuille;
+import modele.IService.IServiceEpargne;
+import modele.IService.IServicePortefeuille;
 import vue.VueEpargne;
 
 /*
@@ -25,10 +25,10 @@ import vue.VueEpargne;
 */
 public class ControleurEpargne {
     private VueEpargne vueEpargne;
-    private ServiceEpargne serviceEpargne;
-    private ServicePortefeuille servicePortefeuille;
+    private IServiceEpargne serviceEpargne;
+    private IServicePortefeuille servicePortefeuille;
 
-    public ControleurEpargne(VueEpargne vueEpargne, ServiceEpargne serviceEpargne, ServicePortefeuille servicePortefeuille) {
+    public ControleurEpargne(VueEpargne vueEpargne, IServiceEpargne serviceEpargne, IServicePortefeuille servicePortefeuille) {
         this.vueEpargne = vueEpargne;
         this.serviceEpargne = serviceEpargne;
         this.servicePortefeuille = servicePortefeuille;

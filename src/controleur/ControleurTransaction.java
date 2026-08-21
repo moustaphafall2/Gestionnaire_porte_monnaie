@@ -7,16 +7,16 @@ import modele.entite.Transaction;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
 import modele.exception.ErreurSauvegardeException;
-import modele.service.ServiceCategorie;
-import modele.service.ServicePortefeuille;
-import modele.service.ServiceTransaction;
+import modele.IService.IServiceCategorie;
+import modele.IService.IServicePortefeuille;
+import modele.IService.IServiceTransaction;
 import vue.VueTransaction;
 
 /*
     * ControleurTransaction enchaîne les écrans "Ajouter une dépense", "Ajouter un revenu" et
     * "Voir l'historique des transactions" (consultation, filtres, modification, suppression) :
-    * il lit les saisies via VueTransaction, applique les règles en appelant ServiceCategorie
-    * (catégorie active), ServicePortefeuille (solde) et ServiceTransaction (enregistrement,
+    * il lit les saisies via VueTransaction, applique les règles en appelant IServiceCategorie
+    * (catégorie active), IServicePortefeuille (solde) et IServiceTransaction (enregistrement,
     * filtrage, modification, suppression), et transmet le résultat à la vue. Il n'affiche
     * jamais rien lui-même et ne contient aucun calcul métier.
     *
@@ -29,12 +29,12 @@ import vue.VueTransaction;
 */
 public class ControleurTransaction {
     private VueTransaction vueTransaction;
-    private ServiceTransaction serviceTransaction;
-    private ServiceCategorie serviceCategorie;
-    private ServicePortefeuille servicePortefeuille;
+    private IServiceTransaction serviceTransaction;
+    private IServiceCategorie serviceCategorie;
+    private IServicePortefeuille servicePortefeuille;
 
-    public ControleurTransaction(VueTransaction vueTransaction, ServiceTransaction serviceTransaction,
-            ServiceCategorie serviceCategorie, ServicePortefeuille servicePortefeuille) {
+    public ControleurTransaction(VueTransaction vueTransaction, IServiceTransaction serviceTransaction,
+            IServiceCategorie serviceCategorie, IServicePortefeuille servicePortefeuille) {
         this.vueTransaction = vueTransaction;
         this.serviceTransaction = serviceTransaction;
         this.serviceCategorie = serviceCategorie;
@@ -146,7 +146,7 @@ public class ControleurTransaction {
             if (choix == 1) {
                 // La catégorie proposée doit être active (règle de gestion "catégorie
                 // cohérente") : contrairement au filtre (case 3), une catégorie inactive
-                // choisie ici serait rejetée par ServiceTransaction, après coup, une fois
+                // choisie ici serait rejetée par IServiceTransaction, après coup, une fois
                 // toutes les saisies déjà faites. On restreint donc aux catégories actives du
                 // même type que la transaction existante.
                 TypeTransaction type = serviceTransaction.getTransaction(id).getType();
@@ -177,8 +177,8 @@ public class ControleurTransaction {
     }
 
     // Réessaie uniquement l'écriture sur le disque, jamais l'opération elle-même : elle a déjà
-    // eu lieu en mémoire au moment où ServiceTransaction lève cette exception (voir
-    // ServicePortefeuille.sauvegarder()). Tant que l'utilisateur accepte de réessayer, on
+    // eu lieu en mémoire au moment où IServiceTransaction lève cette exception (voir
+    // IServicePortefeuille.sauvegarder()). Tant que l'utilisateur accepte de réessayer, on
     // rappelle directement servicePortefeuille.sauvegarder() ; s'il refuse, l'application
     // continue sans bloquer, avec un message clair sur les données non encore enregistrées.
     private void confirmerNouvelleSauvegarde(ErreurSauvegardeException erreur) {

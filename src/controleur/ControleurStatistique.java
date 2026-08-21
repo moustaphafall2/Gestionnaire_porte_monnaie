@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.util.Map;
 
 import modele.enumeration.Categorie;
-import modele.service.ServiceStatistique;
+import modele.IService.IServiceStatistique;
 import vue.VueStatistique;
 
 /*
@@ -17,9 +17,9 @@ import vue.VueStatistique;
 */
 public class ControleurStatistique {
     private VueStatistique vueStatistique;
-    private ServiceStatistique serviceStatistique;
+    private IServiceStatistique serviceStatistique;
 
-    public ControleurStatistique(VueStatistique vueStatistique, ServiceStatistique serviceStatistique) {
+    public ControleurStatistique(VueStatistique vueStatistique, IServiceStatistique serviceStatistique) {
         this.vueStatistique = vueStatistique;
         this.serviceStatistique = serviceStatistique;
     }
