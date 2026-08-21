@@ -7,6 +7,7 @@ import modele.entite.Epargne;
 import modele.entite.MouvementEpargne;
 import modele.entite.Portefeuille;
 import modele.enumeration.SensMouvement;
+import modele.IService.IServiceEpargne;
 
 /*
     * ServiceEpargne porte désormais toutes les règles de gestion des objectifs d'épargne :
@@ -20,7 +21,7 @@ import modele.enumeration.SensMouvement;
     * servicePortefeuille.getDonnees() pour lire ou modifier les objectifs, et par
     * sauvegarder() pour écrire le résultat.
 */
-public class ServiceEpargne {
+public class ServiceEpargne implements IServiceEpargne {
     // Les montants sont des FCFA sans centimes, mais restent des double : deux montants
     // "égaux" en théorie peuvent différer d'une poussière après une suite d'additions/
     // soustractions. On compare donc à un epsilon près plutôt qu'avec ==.

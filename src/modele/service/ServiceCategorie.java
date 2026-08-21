@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import modele.IService.IServiceCategorie;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
 
@@ -15,7 +16,7 @@ import modele.enumeration.TypeTransaction;
     * (ajout/retrait dans un Set), mais déclencher la sauvegarde après coup est une
     * responsabilité du service, jamais de l'entité.
 */
-public class ServiceCategorie {
+public class ServiceCategorie implements IServiceCategorie{
     private ServicePortefeuille servicePortefeuille;
 
     public ServiceCategorie(ServicePortefeuille servicePortefeuille) {

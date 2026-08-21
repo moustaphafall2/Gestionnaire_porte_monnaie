@@ -7,7 +7,7 @@ import java.util.Map;
 import modele.entite.Transaction;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
-
+import modele.IService.IServiceStatistique;
 /*
     * ServiceStatistique calcule les statistiques du portefeuille sur une période donnée : le
     * total dépensé par catégorie, et le total des revenus et des dépenses. Déplacé depuis
@@ -21,7 +21,7 @@ import modele.enumeration.TypeTransaction;
     * Comme les autres services, il ne détient jamais Portefeuille directement : il passe par
     * servicePortefeuille.getDonnees() pour lire les transactions.
 */
-public class ServiceStatistique {
+public class ServiceStatistique implements IServiceStatistique {
     private ServicePortefeuille servicePortefeuille;
 
     public ServiceStatistique(ServicePortefeuille servicePortefeuille) {

@@ -5,6 +5,7 @@ import modele.entite.Portefeuille;
 import modele.entite.Transaction;
 import modele.enumeration.TypeTransaction;
 import modele.persistance.GestionnaireFichier;
+import modele.IService.IServicePortefeuille;
 
 /*
     * ServicePortefeuille a trois responsabilités, et pas une de plus : détenir le
@@ -16,7 +17,7 @@ import modele.persistance.GestionnaireFichier;
     * modele.service manipuler directement le Portefeuille — mais seulement eux, puisque
     * les contrôleurs et les vues sont dans d'autres paquets et n'y ont pas accès.
 */
-public class ServicePortefeuille {
+public class ServicePortefeuille implements IServicePortefeuille {
     private Portefeuille portefeuille;
     private GestionnaireFichier gestionnaireFichier;
 

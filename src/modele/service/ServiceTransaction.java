@@ -9,6 +9,7 @@ import modele.entite.Portefeuille;
 import modele.entite.Transaction;
 import modele.enumeration.Categorie;
 import modele.enumeration.TypeTransaction;
+import modele.IService.IServiceTransaction;
 
 /*
     * ServiceTransaction porte les règles de gestion des dépenses et des revenus : ajout,
@@ -17,7 +18,7 @@ import modele.enumeration.TypeTransaction;
     * Il ne détient jamais Portefeuille en attribut : il passe par
     * servicePortefeuille.getDonnees() à chaque appel, comme le veut la règle du projet.
 */
-public class ServiceTransaction {
+public class ServiceTransaction implements IServiceTransaction {
     private ServicePortefeuille servicePortefeuille;
     private ServiceCategorie serviceCategorie;
 
