@@ -5,7 +5,7 @@ import domain.entity.Portefeuille;
 import domain.entity.Transaction;
 import domain.enumeration.TypeTransaction;
 import application.service.interfaces.IServicePortefeuille;
-import infrastructure.persistence.GestionnaireFichier;
+import infrastructure.persistence.PortefeuilleRepository;
 
 /*
     * ServicePortefeuille a trois responsabilités, et pas une de plus : détenir le
@@ -16,14 +16,19 @@ import infrastructure.persistence.GestionnaireFichier;
     * À la place, getDonnees() (visibilité de paquet) laisse les autres services de
     * application.service.implementation manipuler directement le Portefeuille — mais seulement eux, puisque
     * les contrôleurs et les vues sont dans d'autres paquets et n'y ont pas accès.
+    *
+    * La persistance passe par PortefeuilleRepository, jamais par GestionnaireFichier
+    * directement : ce service ignore tout du stockage réel (fichier JSON aujourd'hui), il ne
+    * connaît que charger()/sauvegarder(). Seul Main sait que l'implémentation concrète est
+    * GestionnaireFichier.
 */
 public class ServicePortefeuille implements IServicePortefeuille {
     private Portefeuille portefeuille;
-    private GestionnaireFichier gestionnaireFichier;
+    private PortefeuilleRepository portefeuilleRepository;
 
-    public ServicePortefeuille(Portefeuille portefeuille, GestionnaireFichier gestionnaireFichier) {
+    public ServicePortefeuille(Portefeuille portefeuille, PortefeuilleRepository portefeuilleRepository) {
         this.portefeuille = portefeuille;
-        this.gestionnaireFichier = gestionnaireFichier;
+        this.portefeuilleRepository = portefeuilleRepository;
     }
 
     // Solde disponible = total des revenus - total des dépenses - total actuellement épargné.
@@ -69,9 +74,9 @@ public class ServicePortefeuille implements IServicePortefeuille {
 
     // Seul point d'écriture du portefeuille sur le disque. Les autres services appellent
     // cette méthode après chaque opération validée, plutôt que de détenir eux-mêmes
-    // GestionnaireFichier ou Portefeuille.
+    // PortefeuilleRepository ou Portefeuille.
     public void sauvegarder() {
-        gestionnaireFichier.sauvegarder(portefeuille);
+        portefeuilleRepository.sauvegarder(portefeuille);
     }
 
     // Visibilité de paquet, volontairement : seuls les services de application.service.implementation (le même

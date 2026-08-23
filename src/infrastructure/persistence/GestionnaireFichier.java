@@ -22,15 +22,17 @@ import exception.ErreurChargementException;
 import exception.ErreurSauvegardeException;
 
 /*
-    * La classe GestionnaireFichier est la seule classe autorisée à lire ou écrire sur le disque.
-    * Elle isole toute la logique de sérialisation/désérialisation JSON (via Gson) du reste de
-    * l'application : Portefeuille n'a jamais besoin de savoir comment les données sont stockées.
+    * La classe GestionnaireFichier est la seule classe autorisée à lire ou écrire sur le disque,
+    * et l'unique implémentation de PortefeuilleRepository. Elle isole toute la logique de
+    * sérialisation/désérialisation JSON (via Gson) du reste de l'application : ServicePortefeuille
+    * ne connaît que l'interface PortefeuilleRepository, jamais cette classe ni la façon dont les
+    * données sont réellement stockées.
     *
     * Gson ne sait pas convertir un LocalDate en JSON par défaut (ce n'est pas un type qu'il
     * reconnaît nativement), il faut donc lui apprendre à le faire avec un adaptateur, enregistré
     * dans le constructeur.
 */
-public class GestionnaireFichier {
+public class GestionnaireFichier implements PortefeuilleRepository {
 
     private String cheminFichier;
     private Gson gson;

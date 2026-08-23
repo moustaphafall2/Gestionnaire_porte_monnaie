@@ -1756,3 +1756,90 @@ En marge de cette étape : `Menu.java`, que les entrées précédentes du journa
 restant à supprimer, n'existe déjà plus sur le disque — sa suppression a dû être faite lors d'un
 nettoyage antérieur non documenté ici. Ce point est donc clos, sans qu'une action supplémentaire
 soit nécessaire.
+
+## 2026-08-21 — Étape 2 de la migration : `PortefeuilleRepository`
+
+Priorité 5 de la maîtresse de stage : séparer clairement la logique métier de la persistance.
+Conception proposée et validée avant tout code (voir échange précédent) : interface minimale à
+deux méthodes, dans `infrastructure/persistence` avec son implémentation, `GestionnaireFichier`
+inchangée en interne, `ServicePortefeuille` typé sur l'interface, `Main` inchangé.
+
+### Ce qui a été écrit
+
+- **`PortefeuilleRepository`** (nouvelle interface, `infrastructure.persistence`) : deux méthodes,
+  `charger()` et `sauvegarder(Portefeuille)`, copiées telles quelles depuis les signatures déjà
+  utilisées par `GestionnaireFichier`. Rien de plus : ni recherche par id, ni mise à jour
+  partielle, l'application ne charge qu'au démarrage et ne sauvegarde qu'un portefeuille entier.
+- **`GestionnaireFichier`** : ajoute `implements PortefeuilleRepository`. Aucune autre ligne
+  changée — sauvegarde atomique, encodage UTF-8, adaptateur `LocalDate`, chargement défensif à
+  quatre cas, tout reste identique. Seul le commentaire d'en-tête est mis à jour pour dire que
+  cette classe est désormais "l'unique implémentation de `PortefeuilleRepository`".
+- **`ServicePortefeuille`** : le champ et le paramètre de constructeur passent du type
+  `GestionnaireFichier` au type `PortefeuilleRepository`, renommés `gestionnaireFichier` →
+  `portefeuilleRepository`. L'import de `GestionnaireFichier` disparaît : cette classe ne connaît
+  plus du tout cette classe concrète, seulement l'interface. `sauvegarder()` appelle
+  `portefeuilleRepository.sauvegarder(portefeuille)` au lieu de
+  `gestionnaireFichier.sauvegarder(portefeuille)` — même appel, juste renommé.
+- **Commentaires mis à jour** : le commentaire de classe de `ServicePortefeuille` (ajout d'un
+  paragraphe expliquant le passage par l'interface), sa méthode `sauvegarder()` ("PortefeuilleRepository
+  ou Portefeuille" au lieu de "GestionnaireFichier ou Portefeuille"), et le commentaire de classe
+  de `Portefeuille` ("détenir le PortefeuilleRepository" au lieu de "détenir le
+  GestionnaireFichier"). Les mentions de `GestionnaireFichier` qui restent ailleurs
+  (`Main.java`, `Portefeuille.reparerApresChargement()`, `ErreurChargementException`) sont
+  restées inchangées : elles décrivent toutes un comportement propre à cette classe concrète
+  (Main l'instancie directement, les deux autres documentent ce que fait précisément son
+  `charger()`), pas un contrat que l'interface devrait porter à sa place.
+- **`Main.java`** : **aucune ligne changée**. Il continue d'instancier `GestionnaireFichier`
+  directement et de le passer au constructeur de `ServicePortefeuille`, qui accepte maintenant un
+  `PortefeuilleRepository` — Java accepte la conversion implicite, `GestionnaireFichier`
+  implémentant cette interface.
+
+### Choix de conception
+
+Le détail de la conception (nom de l'interface, emplacement, sort de `GestionnaireFichier`) a été
+proposé et discuté avant d'écrire une seule ligne — voir l'échange qui précède cette entrée. Deux
+points qui n'y étaient pas encore tranchés en détail :
+
+**Pourquoi les mentions de `GestionnaireFichier` dans `Main`, `Portefeuille` et
+`ErreurChargementException` ne changent pas.** La consigne était de corriger les commentaires
+"là où c'est maintenant l'interface qui compte". Dans ces trois cas, ce n'est pas l'interface qui
+compte mais la classe concrète elle-même : `Main` est le seul endroit du projet qui a le droit de
+connaître `GestionnaireFichier` par son nom (règle 5 du CLAUDE.md) ; le commentaire de
+`reparerApresChargement()` documente que c'est précisément le `charger()` de cette classe qui
+l'appelle après désérialisation (un détail d'implémentation, pas un contrat d'interface) ; et
+`ErreurChargementException` documente ce que son `charger()` à elle ne peut pas absorber. Changer
+ces trois-là en "PortefeuilleRepository" aurait été inexact : l'interface ne fait rien de tout ça
+par elle-même, seule cette implémentation le fait.
+
+### Points à savoir défendre
+
+- **`ServicePortefeuille` importe-t-il encore `GestionnaireFichier` ?** Non, plus du tout —
+  vérifié dans le fichier après modification : le seul import de persistance restant est
+  `infrastructure.persistence.PortefeuilleRepository`. C'est la preuve concrète que la
+  séparation demandée (priorité 5) est en place : ce service ne peut plus, même par erreur,
+  appeler une méthode propre à `GestionnaireFichier` qui ne serait pas dans le contrat.
+- **Pourquoi `Main` n'a-t-il rien à changer ?** Parce que le typage par interface ne change que la
+  façon dont un consommateur *déclare* sa dépendance (ici, le paramètre du constructeur de
+  `ServicePortefeuille`), jamais la façon dont l'objet est construit. C'est exactement le même
+  raisonnement que pour les `IServiceXxx` à l'étape des interfaces de service : seul `Main` sait
+  quelle implémentation concrète existe, tout le reste du projet n'en a plus besoin.
+- **`getDonnees()` est-elle toujours protégée après ce changement ?** Oui, vérifié à nouveau
+  concrètement, même méthode qu'à l'étape 1 : un fichier de test placé dans
+  `presentation.controller` qui tente `servicePortefeuille.getDonnees()` refuse toujours de
+  compiler ("getDonnees() is not public in ServicePortefeuille; cannot be accessed from outside
+  package"). Ce changement ne touchait que la façon dont `ServicePortefeuille` parle au disque,
+  pas la façon dont il protège le `Portefeuille` en mémoire vis-à-vis des autres couches — les
+  deux sujets sont indépendants.
+
+### Pièges rencontrés
+
+Aucun — chaque modification (interface, `GestionnaireFichier`, `ServicePortefeuille`,
+commentaires) a été suivie d'une compilation complète, et l'application a été relancée sur les
+vraies données (`portefeuille.json`) pour confirmer que le chargement au démarrage fonctionne de
+bout en bout à travers la nouvelle interface — fichier resté identique après coup (vérifié par
+empreinte MD5), aucune écriture déclenchée par une simple consultation du solde.
+
+### Reste à faire
+
+Étapes 3 à 5 du CLAUDE.md : DTO, réduction des dépendances autour de `ServicePortefeuille`,
+nettoyage final. Aucune prise d'avance pour l'instant.

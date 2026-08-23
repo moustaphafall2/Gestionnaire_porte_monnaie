@@ -14,7 +14,7 @@ import domain.enumeration.Categorie;
     * règle de gestion : uniquement sa structure, l'ajout/retrait dans ses listes et son
     * ensemble, la génération des identifiants, et l'accès par clé (getObjectif). Tous les
     * calculs vivent dans application.service.implementation, et la persistance dans ServicePortefeuille, seul à
-    * détenir le GestionnaireFichier et à déclencher la sauvegarde.
+    * détenir le PortefeuilleRepository et à déclencher la sauvegarde.
 */
 public class Portefeuille {
 
