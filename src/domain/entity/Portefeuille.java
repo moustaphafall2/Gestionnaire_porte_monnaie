@@ -10,11 +10,23 @@ import domain.enumeration.Categorie;
 
 /*
     * La classe Portefeuille regroupe toutes les données de l'utilisateur : les transactions,
-    * les catégories actives et les objectifs d'épargne. Elle ne porte plus aucun calcul ni
-    * règle de gestion : uniquement sa structure, l'ajout/retrait dans ses listes et son
-    * ensemble, la génération des identifiants, et l'accès par clé (getObjectif). Tous les
-    * calculs vivent dans application.service.implementation, et la persistance dans ServicePortefeuille, seul à
-    * détenir le PortefeuilleRepository et à déclencher la sauvegarde.
+    * les catégories actives et les objectifs d'épargne. Elle ne porte aucun calcul, aucune règle
+    * de gestion, ni la moindre recherche : uniquement sa structure, l'ajout/retrait dans ses
+    * listes et son ensemble, et l'accès à ses compteurs d'identifiants. Tous les calculs et
+    * recherches vivent dans application.service.implementation ; la persistance dans
+    * ServicePortefeuille, seul à détenir le PortefeuilleRepository et à déclencher la
+    * sauvegarde ; la réparation après désérialisation Gson dans GestionnaireFichier — un
+    * contournement d'un comportement de Gson, propre à la persistance, qui n'a rien à voir avec
+    * une règle du domaine.
+    *
+    * ajouterTransaction()/retirerTransaction(), ajouterObjectif()/retirerObjectif() et
+    * activerCategorie()/desactiverCategorie() restent ici plutôt que de disparaître au profit
+    * d'un setter qui remplacerait la liste ou l'ensemble entier : un setter de collection
+    * obligerait chaque service à copier la liste, la modifier, puis la réinjecter en entier pour
+    * un seul ajout ou retrait — plus lourd, et pas plus sûr. Ce sont des setters d'un élément
+    * d'une collection, pas des méthodes de calcul ; les getters correspondants restent des vues
+    * non modifiables (Collections.unmodifiableList/unmodifiableSet) : la seule façon d'ajouter
+    * ou de retirer un élément passe par ces méthodes dédiées, jamais par la liste renvoyée.
 */
 public class Portefeuille {
 
@@ -36,17 +48,21 @@ public class Portefeuille {
 
     // Gestion des transactions
 
-    // Vue brute des transactions, utilisée par les services pour faire leurs calculs.
-    // L'entité ne fait ici que donner accès à ses données.
+    // Vue non modifiable des transactions. Renvoie null si le champ lui-même est encore null
+    // (juste après une désérialisation Gson, avant réparation par GestionnaireFichier) plutôt
+    // que de lever une NullPointerException en tentant de l'envelopper.
     public List<Transaction> getTransactions() {
-        return Collections.unmodifiableList(transactions);
+        return transactions == null ? null : Collections.unmodifiableList(transactions);
     }
 
-    // Distribue l'identifiant suivant et avance le compteur. Le compteur reste ici (champ de
-    // l'entité, donc sauvegardé) : s'il repartait de zéro au redémarrage, on créerait des
-    // doublons. Mais la construction de la Transaction elle-même se fait dans ServiceTransaction.
-    public int genererIdTransaction() {
-        return prochainIdTransaction++;
+    // Setter classique du compteur : la génération de l'identifiant suivant (lire puis
+    // incrémenter) est désormais un traitement porté par ServiceTransaction, pas par l'entité.
+    public int getProchainIdTransaction() {
+        return prochainIdTransaction;
+    }
+
+    public void setProchainIdTransaction(int prochainIdTransaction) {
+        this.prochainIdTransaction = prochainIdTransaction;
     }
 
     // Remplace l'ancien setter : ajouter une transaction est un ajout à la liste, pas une
@@ -62,7 +78,7 @@ public class Portefeuille {
     // Gestion des catégories
 
     public Set<Categorie> getCategoriesActives() {
-        return Collections.unmodifiableSet(categoriesActives);
+        return categoriesActives == null ? null : Collections.unmodifiableSet(categoriesActives);
     }
 
     public void activerCategorie(Categorie categorie) {
@@ -77,10 +93,13 @@ public class Portefeuille {
 
     // Gestion des objectifs d'épargne
 
-    // Distribue l'identifiant suivant et avance le compteur, comme genererIdTransaction().
-    // La construction de l'Epargne elle-même se fait dans ServiceEpargne.
-    public int genererIdObjectif() {
-        return prochainIdObjectif++;
+    // Setter classique du compteur, même principe que getProchainIdTransaction() ci-dessus.
+    public int getProchainIdObjectif() {
+        return prochainIdObjectif;
+    }
+
+    public void setProchainIdObjectif(int prochainIdObjectif) {
+        this.prochainIdObjectif = prochainIdObjectif;
     }
 
     // Remplace l'ancienne construction dans creerObjectif() : ajouter un objectif est un ajout
@@ -97,40 +116,24 @@ public class Portefeuille {
     }
 
     public List<Epargne> getObjectifs() {
-        return Collections.unmodifiableList(objectifs);
+        return objectifs == null ? null : Collections.unmodifiableList(objectifs);
     }
 
-    // Recherche publique d'un objectif par id, utilisée par ServiceEpargne pour retrouver
-    // l'objectif choisi avant de contribuer, retirer, supprimer ou en afficher le détail.
-    public Epargne getObjectif(int idObjectif) {
-        return trouverObjectif(idObjectif);
+    // Réparation après désérialisation Gson : voir GestionnaireFichier, seule appelante. Ces
+    // trois setters remplacent le champ entier plutôt que d'ajouter un élément — volontairement
+    // différents de ajouterTransaction()/ajouterObjectif()/activerCategorie() ci-dessus, qui
+    // restent la seule façon normale de faire évoluer ces collections une fois le portefeuille
+    // chargé. N'importe quel autre appelant qui s'en servirait remplacerait toute la liste ou
+    // l'ensemble d'un coup, en perdant son contenu existant.
+    public void setTransactions(List<Transaction> transactions) {
+        this.transactions = transactions;
     }
 
-    // Recherche interne d'un objectif par id, utilisée par getObjectif()
-    private Epargne trouverObjectif(int idObjectif) {
-        for (Epargne objectif : objectifs) {
-            if (objectif.getId() == idObjectif) {
-                return objectif;
-            }
-        }
-        throw new IllegalArgumentException("Aucun objectif avec l'identifiant " + idObjectif + ".");
+    public void setCategoriesActives(Set<Categorie> categoriesActives) {
+        this.categoriesActives = categoriesActives;
     }
 
-    // Gson contourne le constructeur à la désérialisation (il remplit les champs directement) :
-    // un champ absent du JSON, ou explicitement "null", reste à null au lieu d'être initialisé
-    // à une collection vide. Utilisée uniquement par GestionnaireFichier.charger(), juste après
-    // la désérialisation, pour garantir qu'un Portefeuille rechargé est toujours exploitable
-    // (getTransactions()/getCategoriesActives()/getObjectifs() ne doivent jamais lever de
-    // NullPointerException).
-    public void reparerApresChargement() {
-        if (transactions == null) {
-            transactions = new ArrayList<>();
-        }
-        if (categoriesActives == null) {
-            categoriesActives = new HashSet<>();
-        }
-        if (objectifs == null) {
-            objectifs = new ArrayList<>();
-        }
+    public void setObjectifs(List<Epargne> objectifs) {
+        this.objectifs = objectifs;
     }
 }

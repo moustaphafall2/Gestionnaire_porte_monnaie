@@ -42,12 +42,22 @@ public class ServiceTransaction implements IServiceTransaction {
     }
 
     // Anciennement Transaction.validerId(). L'identifiant est toujours généré par
-    // Portefeuille.genererIdTransaction(), donc toujours strictement positif en pratique ; ce
+    // genererIdTransaction() ci-dessous, donc toujours strictement positif en pratique ; ce
     // contrôle reste défensif, au cas où cette génération changerait un jour.
     private void validerId(int id) {
         if (id <= 0) {
             throw new IllegalArgumentException("L'identifiant doit être strictement positif.");
         }
+    }
+
+    // Anciennement Portefeuille.genererIdTransaction() : lire le compteur puis l'incrémenter
+    // était un traitement, pas un attribut ni un getter/setter classique. Portefeuille n'expose
+    // plus que getProchainIdTransaction()/setProchainIdTransaction(int) ; c'est ce service qui
+    // combine les deux pour distribuer l'identifiant suivant.
+    private int genererIdTransaction(Portefeuille portefeuille) {
+        int id = portefeuille.getProchainIdTransaction();
+        portefeuille.setProchainIdTransaction(id + 1);
+        return id;
     }
 
     // Anciennement Transaction.validerMontant(). Appelée à la fois pour un ajout et pour une
@@ -105,7 +115,7 @@ public class ServiceTransaction implements IServiceTransaction {
         validerDate(date);
 
         Portefeuille portefeuille = servicePortefeuille.getDonnees();
-        int id = portefeuille.genererIdTransaction();
+        int id = genererIdTransaction(portefeuille);
         validerId(id);
         Transaction depense = new Transaction(id, montant, TypeTransaction.DEPENSE, categorie, date, normaliserDescription(description));
         portefeuille.ajouterTransaction(depense);
@@ -121,7 +131,7 @@ public class ServiceTransaction implements IServiceTransaction {
         validerDate(date);
 
         Portefeuille portefeuille = servicePortefeuille.getDonnees();
-        int id = portefeuille.genererIdTransaction();
+        int id = genererIdTransaction(portefeuille);
         validerId(id);
         Transaction revenu = new Transaction(id, montant, TypeTransaction.REVENU, categorie, date, normaliserDescription(description));
         portefeuille.ajouterTransaction(revenu);

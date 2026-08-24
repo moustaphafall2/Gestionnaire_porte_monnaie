@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashSet;
 
 import domain.entity.Portefeuille;
 import exception.ErreurChargementException;
@@ -94,7 +96,7 @@ public class GestionnaireFichier implements PortefeuilleRepository {
             if (portefeuille == null) {
                 return new Portefeuille();
             }
-            portefeuille.reparerApresChargement();
+            reparerApresChargement(portefeuille);
             return portefeuille;
         } catch (JsonSyntaxException exception) {
             return new Portefeuille();
@@ -105,5 +107,24 @@ public class GestionnaireFichier implements PortefeuilleRepository {
 
     private boolean fichierExiste() {
         return Files.exists(Paths.get(cheminFichier));
+    }
+
+    // Gson contourne le constructeur à la désérialisation (il remplit les champs directement) :
+    // un champ absent du JSON, ou explicitement "null", reste à null au lieu d'être initialisé
+    // à une collection vide. Ce n'est pas une règle du domaine, c'est un contournement d'un
+    // comportement de Gson : elle vit ici, dans la classe qui connaît Gson, plutôt que dans
+    // Portefeuille. Garantit qu'un Portefeuille rechargé est toujours exploitable
+    // (getTransactions()/getCategoriesActives()/getObjectifs() ne renvoient jamais null après
+    // cet appel).
+    private void reparerApresChargement(Portefeuille portefeuille) {
+        if (portefeuille.getTransactions() == null) {
+            portefeuille.setTransactions(new ArrayList<>());
+        }
+        if (portefeuille.getCategoriesActives() == null) {
+            portefeuille.setCategoriesActives(new HashSet<>());
+        }
+        if (portefeuille.getObjectifs() == null) {
+            portefeuille.setObjectifs(new ArrayList<>());
+        }
     }
 }

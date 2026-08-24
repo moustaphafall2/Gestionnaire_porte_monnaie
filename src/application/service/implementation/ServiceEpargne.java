@@ -98,7 +98,20 @@ public class ServiceEpargne implements IServiceEpargne {
     // l'objectif choisi (nom, mouvements...) avant de contribuer, retirer ou en afficher le
     // détail.
     public Epargne getObjectif(int idObjectif) {
-        return servicePortefeuille.getDonnees().getObjectif(idObjectif);
+        return trouverObjectif(idObjectif);
+    }
+
+    // Anciennement Portefeuille.getObjectif()/trouverObjectif() : une recherche par identifiant
+    // est un parcours de liste, donc un traitement, jamais un accès à un attribut. Même principe
+    // que ServiceTransaction.trouverTransaction(), qui fait exactement ça pour les transactions
+    // sans jamais passer par une méthode de recherche de Portefeuille.
+    private Epargne trouverObjectif(int idObjectif) {
+        for (Epargne objectif : servicePortefeuille.getDonnees().getObjectifs()) {
+            if (objectif.getId() == idObjectif) {
+                return objectif;
+            }
+        }
+        throw new IllegalArgumentException("Aucun objectif avec l'identifiant " + idObjectif + ".");
     }
 
     // Anciennement Epargne.validerNom().
@@ -115,15 +128,26 @@ public class ServiceEpargne implements IServiceEpargne {
         }
     }
 
+    // Anciennement Portefeuille.genererIdObjectif() : lire le compteur puis l'incrémenter était
+    // un traitement, pas un attribut ni un getter/setter classique. Portefeuille n'expose plus
+    // que getProchainIdObjectif()/setProchainIdObjectif(int) ; c'est ce service qui combine les
+    // deux pour distribuer l'identifiant suivant. Même principe que
+    // ServiceTransaction.genererIdTransaction().
+    private int genererIdObjectif(Portefeuille portefeuille) {
+        int id = portefeuille.getProchainIdObjectif();
+        portefeuille.setProchainIdObjectif(id + 1);
+        return id;
+    }
+
     // Crée un nouvel objectif et l'ajoute au portefeuille. Le compteur d'identifiants reste
-    // dans Portefeuille (donc sauvegardé), pour la même raison que genererIdTransaction() :
-    // repartir de zéro au redémarrage créerait des doublons.
+    // dans Portefeuille (donc sauvegardé) : repartir de zéro au redémarrage créerait des
+    // doublons.
     public Epargne creerObjectif(String nom, double montantCible, LocalDate dateLimite) {
         validerNomObjectif(nom);
         validerMontantCible(montantCible);
 
         Portefeuille portefeuille = servicePortefeuille.getDonnees();
-        Epargne objectif = new Epargne(portefeuille.genererIdObjectif(), nom, montantCible, dateLimite);
+        Epargne objectif = new Epargne(genererIdObjectif(portefeuille), nom, montantCible, dateLimite);
         portefeuille.ajouterObjectif(objectif);
         servicePortefeuille.sauvegarder();
         return objectif;
@@ -174,7 +198,7 @@ public class ServiceEpargne implements IServiceEpargne {
                     + soldeDisponible + " FCFA).");
         }
 
-        Epargne objectif = servicePortefeuille.getDonnees().getObjectif(idObjectif);
+        Epargne objectif = trouverObjectif(idObjectif);
         objectif.ajouterMouvement(new MouvementEpargne(montant, SensMouvement.CONTRIBUTION, date));
         servicePortefeuille.sauvegarder();
     }
@@ -187,7 +211,7 @@ public class ServiceEpargne implements IServiceEpargne {
         validerSensMouvement(SensMouvement.RETRAIT);
         validerDateMouvement(date);
 
-        Epargne objectif = servicePortefeuille.getDonnees().getObjectif(idObjectif);
+        Epargne objectif = trouverObjectif(idObjectif);
         if (montant > getMontantActuel(objectif)) {
             throw new IllegalStateException("Le montant du retrait ne peut pas dépasser le montant actuellement épargné.");
         }
@@ -201,7 +225,7 @@ public class ServiceEpargne implements IServiceEpargne {
     // (pas d'une donnée invalide) : IllegalStateException.
     public void supprimerObjectif(int idObjectif) {
         Portefeuille portefeuille = servicePortefeuille.getDonnees();
-        Epargne objectif = portefeuille.getObjectif(idObjectif);
+        Epargne objectif = trouverObjectif(idObjectif);
         if (!estVide(objectif)) {
             throw new IllegalStateException("L'objectif n'est pas vide (" + getMontantActuel(objectif)
                     + " FCFA restants), retirez d'abord les sommes épargnées.");

@@ -2163,3 +2163,128 @@ sortie identique à celle d'avant la correction.
 
 Étape 3 terminée. Étapes 4 à 6 du CLAUDE.md, à venir sur demande : DTO, réduction des
 dépendances autour de `ServicePortefeuille`, nettoyage final.
+
+## 2026-08-24 — Les quatre entités sans aucune logique de validation
+
+Nouvelle exigence de la maîtresse de stage, appliquée à la lettre : les entités
+(`Transaction`, `Epargne`, `MouvementEpargne`, `Portefeuille`) ne contiennent plus que leur
+structure — attributs, constructeur, getters, setters. Tout le reste (validation, génération
+d'identifiants, recherche par clé, réparation post-chargement) a été déplacé vers le service ou
+la classe de persistance concernée.
+
+### Ce qui a été écrit
+
+- **`Transaction`** : `validerId`, `validerMontant`, `validerType`, `validerCategorie`,
+  `validerDate` retirées. Constructeur et setters ne font plus qu'assigner. Toute la validation
+  (montant positif, date pas dans le futur, catégorie cohérente avec le type) est désormais dans
+  **`ServiceTransaction`**, plus une méthode nouvelle, `normaliserDescription()`, qui remplace
+  une description `null` par une chaîne vide.
+- **`Epargne`** : `validerNom`, `validerMontantCible` retirées, déplacées dans
+  **`ServiceEpargne`** (`validerNomObjectif()`, `validerMontantCible()`).
+- **`MouvementEpargne`** : `validerMontant`, `validerSens`, `validerDate` retirées, déplacées
+  dans **`ServiceEpargne`** (`validerMontantMouvement()`, `validerSensMouvement()`,
+  `validerDateMouvement()`), partagées par `contribuerObjectif()` et `retirerObjectif()`.
+- **`Portefeuille`**, quatre points tranchés avec l'étudiant avant d'écrire le code :
+  - `genererIdTransaction()`/`genererIdObjectif()` retirées, remplacées par des getters/setters
+    classiques sur les deux compteurs (`getProchainIdTransaction()`/
+    `setProchainIdTransaction(int)`, pareil pour objectif). La génération (lire, incrémenter)
+    est désormais une méthode privée de `ServiceTransaction`/`ServiceEpargne`.
+  - `ajouterTransaction()`/`retirerTransaction()`, `ajouterObjectif()`/`retirerObjectif()`,
+    `activerCategorie()`/`desactiverCategorie()` **conservées** telles quelles : défendues comme
+    des setters d'un élément d'une collection, pas comme des méthodes de calcul (voir "Choix de
+    conception").
+  - `getObjectif(int)`/`trouverObjectif(int)` retirées. La recherche par identifiant vit
+    maintenant dans **`ServiceEpargne.trouverObjectif()`** (méthode privée), sur le modèle déjà
+    en place dans `ServiceTransaction.trouverTransaction()`.
+  - `reparerApresChargement()` retirée, déplacée dans **`GestionnaireFichier`** (voir plus bas).
+  - `getTransactions()`/`getCategoriesActives()`/`getObjectifs()` : toujours des vues non
+    modifiables, mais désormais null-safe (renvoient `null` si le champ sous-jacent est encore
+    `null`, plutôt que de lever une `NullPointerException` en tentant de l'envelopper).
+  - Trois nouveaux setters, `setTransactions(List)`, `setCategoriesActives(Set)`,
+    `setObjectifs(List)` : remplacent le champ entier, à la différence des méthodes d'ajout/
+    retrait ci-dessus. Réservés à l'usage de `GestionnaireFichier`.
+- **`GestionnaireFichier`** : nouvelle méthode privée `reparerApresChargement(Portefeuille)`,
+  appelée juste après la désérialisation dans `charger()`. Utilise les nouveaux setters de
+  collection pour remplacer un champ resté `null` par une collection vide.
+- **Aucun changement d'interface** : `IServiceTransaction`, `IServiceEpargne`,
+  `IServicePortefeuille` inchangées, toutes les nouvelles méthodes sont privées.
+
+### Choix de conception
+
+**Pourquoi `ajouterTransaction()`/`retirerTransaction()` (et les quatre méthodes symétriques)
+restent dans `Portefeuille`, alors qu'elles ne sont ni un attribut, ni le constructeur, ni un
+getter, ni un setter au sens strict.** Discuté et validé avant d'écrire le code. Ce sont des
+setters d'un élément d'une collection, pas des méthodes de calcul ou de décision. La seule
+alternative pour respecter la lettre de la règle aurait été un `setTransactions(List<Transaction>)`
+qui remplace la liste entière : chaque service aurait dû copier la liste actuelle, la modifier,
+puis la réinjecter en entier pour un simple ajout ou retrait — plus lourd à lire, et pas plus
+sûr, puisque le point qui compte (empêcher un contournement des services) est déjà garanti
+autrement : `getTransactions()` reste une vue non modifiable, et `Portefeuille` lui-même n'est
+accessible que via `ServicePortefeuille.getDonnees()`, à visibilité de paquet. Retirer ces
+méthodes n'aurait rien ajouté à la protection réelle, seulement rendu le code plus lourd pour
+paraître plus conforme à la lettre de la règle.
+
+**Pourquoi les getters de liste ne sont pas devenus modifiables.** C'est la conséquence
+directement liée au choix ci-dessus : comme `ajouterTransaction()`/`retirerTransaction()` etc.
+restent la seule façon d'ajouter ou de retirer un élément, rien n'obligeait à ouvrir les getters.
+Si ces méthodes avaient dû disparaître, les getters auraient dû renvoyer les collections réelles
+pour que les services puissent les modifier — un vrai recul de protection, puisque n'importe quel
+service (pas seulement celui qui devrait légitimement écrire) aurait alors pu modifier la liste
+sans validation.
+
+**Pourquoi `reparerApresChargement()` part dans `GestionnaireFichier`, contrairement à ma
+première proposition.** Position de l'étudiant, tranchée : cette méthode ne répare aucune règle
+du domaine, elle rattrape un comportement de Gson (contournement du constructeur à la
+désérialisation, déjà documenté comme piège dans le CLAUDE.md). Elle appartient donc à la
+persistance, pas à l'entité. Ça a nécessité d'exposer trois setters de collection sur
+`Portefeuille` — la règle demandait de toute façon des setters — et de rendre les trois getters
+de liste tolérants à un champ encore `null`, pour que `GestionnaireFichier` puisse tester leur
+état sans lever de `NullPointerException` en les appelant.
+
+**Pourquoi les getters de liste vérifient `null` avant d'envelopper.** Sans ce garde-fou,
+`Collections.unmodifiableList(transactions)` lève immédiatement une `NullPointerException` si
+`transactions` est `null` — impossible, alors, pour `GestionnaireFichier` de détecter l'état
+"pas encore réparé" en appelant simplement `getTransactions()`. Avec le garde-fou, le getter dit
+la vérité sur l'état du champ (`null` si rien n'a encore été chargé, une vue non modifiable
+sinon), ce qui est en réalité plus correct que l'ancien comportement, qui aurait toujours planté
+si quoi que ce soit avait appelé ce getter avant `reparerApresChargement()`.
+
+### Points à savoir défendre
+
+- **Pourquoi `validerId`/`validerType` (dans `ServiceTransaction`) et `validerSensMouvement`
+  (dans `ServiceEpargne`) valident-elles des valeurs qui ne peuvent jamais être invalides en
+  pratique (l'identifiant vient toujours du compteur, le type et le sens sont toujours des
+  constantes fixées par le code) ?** Ce sont des contrôles défensifs, hérités tels quels des
+  entités : rien ne garantit qu'ils resteront toujours inatteignables si le code évolue, et les
+  retirer aurait fait disparaître une règle sans certitude qu'elle ne servira jamais. Ça n'a
+  jamais été demandé de les juger utiles, seulement de les déplacer sans rien perdre.
+- **`ajouterTransaction()` n'est-elle pas, en réalité, un traitement déguisé en setter ?** C'est
+  la question la plus discutable de cette étape, assumée comme telle : elle ne calcule rien, ne
+  décide rien, ne valide rien — elle ajoute un élément déjà construit et déjà validé à une liste.
+  La différence avec un vrai traitement (comme l'ancien `genererIdTransaction()`, qui calculait
+  une valeur à partir d'un état) est que `ajouterTransaction()` ne fait qu'exécuter l'ordre
+  qu'on lui donne, sans rien décider elle-même.
+- **Comment vérifier que les quatre cas de chargement défensif fonctionnent toujours ?** Testés
+  un par un dans un répertoire isolé (jamais les vraies données) : fichier absent, fichier vide,
+  JSON malformé (les trois sans plantage, solde à 0 dans les trois cas), et surtout listes
+  explicitement `null` dans un JSON par ailleurs valide — non seulement l'application ne plante
+  pas, mais une catégorie activée puis une dépense ajoutée après un tel chargement s'enregistrent
+  correctement sur le disque, preuve que les collections réparées sont de vraies listes/ensembles
+  mutables, pas seulement des valeurs qui ne plantent plus en lecture.
+- **`getDonnees()` est-elle toujours protégée après ce remaniement ?** Oui, revérifié
+  concrètement une nouvelle fois : ce travail n'a touché ni `ServicePortefeuille` ni sa
+  visibilité de paquet.
+
+### Pièges rencontrés
+
+Aucun sur le code final, mais un aller-retour de conception noté ici parce qu'il explique un
+choix : la première idée pour `reparerApresChargement()` était de la garder dans `Portefeuille`
+comme exception pragmatique. Revue et abandonnée à la demande de l'étudiant (voir "Choix de
+conception" ci-dessus), au profit du déplacement dans `GestionnaireFichier` — ce qui a fait
+apparaître, en le concevant, le problème des getters non null-safe, résolu avant qu'il ne
+devienne un bug réel.
+
+### Reste à faire
+
+Étapes 4 à 6 du CLAUDE.md, à venir sur demande : DTO, réduction des dépendances autour de
+`ServicePortefeuille`, nettoyage final.
