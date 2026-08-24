@@ -18,6 +18,12 @@ import application.service.interfaces.IServiceEpargne;
     * getters, ajouterMouvement), et Portefeuille se limite à l'accès par identifiant
     * (getObjectif), un accès par clé et non un calcul.
     *
+    * Il porte aussi, depuis cette étape, toute la validation qui vivait auparavant dans Epargne
+    * (nom non vide, montant cible strictement positif) et dans MouvementEpargne (montant
+    * strictement positif, sens non nul, date pas dans le futur) : aucune des deux entités ne se
+    * protège plus elle-même, c'est ce service qui garantit qu'aucun objet invalide ne peut être
+    * construit.
+    *
     * Comme les autres services, il ne détient jamais Portefeuille directement : il passe par
     * servicePortefeuille.getDonnees() pour lire ou modifier les objectifs, et par
     * sauvegarder() pour écrire le résultat.
@@ -95,10 +101,27 @@ public class ServiceEpargne implements IServiceEpargne {
         return servicePortefeuille.getDonnees().getObjectif(idObjectif);
     }
 
+    // Anciennement Epargne.validerNom().
+    private void validerNomObjectif(String nom) {
+        if (nom == null || nom.isBlank()) {
+            throw new IllegalArgumentException("Le nom de l'objectif est obligatoire.");
+        }
+    }
+
+    // Anciennement Epargne.validerMontantCible().
+    private void validerMontantCible(double montantCible) {
+        if (montantCible <= 0) {
+            throw new IllegalArgumentException("Le montant cible doit être strictement positif.");
+        }
+    }
+
     // Crée un nouvel objectif et l'ajoute au portefeuille. Le compteur d'identifiants reste
     // dans Portefeuille (donc sauvegardé), pour la même raison que genererIdTransaction() :
     // repartir de zéro au redémarrage créerait des doublons.
     public Epargne creerObjectif(String nom, double montantCible, LocalDate dateLimite) {
+        validerNomObjectif(nom);
+        validerMontantCible(montantCible);
+
         Portefeuille portefeuille = servicePortefeuille.getDonnees();
         Epargne objectif = new Epargne(portefeuille.genererIdObjectif(), nom, montantCible, dateLimite);
         portefeuille.ajouterObjectif(objectif);
@@ -106,11 +129,45 @@ public class ServiceEpargne implements IServiceEpargne {
         return objectif;
     }
 
+    // Anciennement MouvementEpargne.validerMontant(). Appelée à la fois par contribuerObjectif()
+    // et retirerObjectif(), qui construisent chacune un MouvementEpargne.
+    private void validerMontantMouvement(double montant) {
+        if (montant <= 0) {
+            throw new IllegalArgumentException("Le montant doit être strictement positif.");
+        }
+    }
+
+    // Anciennement MouvementEpargne.validerSens(). Le sens n'est jamais fourni par
+    // l'utilisateur (toujours SensMouvement.CONTRIBUTION ou RETRAIT, choisi par
+    // contribuerObjectif()/retirerObjectif()) ; ce contrôle reste défensif.
+    private void validerSensMouvement(SensMouvement sens) {
+        if (sens == null) {
+            throw new IllegalArgumentException("Le sens du mouvement est obligatoire.");
+        }
+    }
+
+    // Anciennement MouvementEpargne.validerDate(). Mêmes deux appelantes que
+    // validerMontantMouvement().
+    private void validerDateMouvement(LocalDate date) {
+        if (date == null) {
+            throw new IllegalArgumentException("La date est obligatoire.");
+        }
+        if (date.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("La date ne peut pas être dans le futur.");
+        }
+    }
+
     // Un objectif d'épargne fonctionne comme un coffre : impossible d'y placer une somme
     // dont on ne dispose pas. La vérification se fait ici, et pas dans Epargne, car Epargne
     // ne connaît pas le solde disponible du portefeuille. Refusé à cause de l'état actuel
-    // du portefeuille (pas d'une donnée invalide en soi) : IllegalStateException.
+    // du portefeuille (pas d'une donnée invalide en soi) : IllegalStateException. Les contrôles
+    // sur la donnée elle-même (montant, date) passent avant : inutile de vérifier le solde pour
+    // un montant qui n'est de toute façon pas valide.
     public void contribuerObjectif(int idObjectif, double montant, LocalDate date) {
+        validerMontantMouvement(montant);
+        validerSensMouvement(SensMouvement.CONTRIBUTION);
+        validerDateMouvement(date);
+
         double soldeDisponible = servicePortefeuille.getSoldeDisponible();
         if (montant > soldeDisponible) {
             throw new IllegalStateException("Le montant de la contribution dépasse le solde disponible ("
@@ -126,6 +183,10 @@ public class ServiceEpargne implements IServiceEpargne {
     // n'est pas le montant en lui-même qui est invalide, c'est l'état actuel de l'objectif qui
     // ne le permet pas (IllegalStateException, pas IllegalArgumentException).
     public void retirerObjectif(int idObjectif, double montant, LocalDate date) {
+        validerMontantMouvement(montant);
+        validerSensMouvement(SensMouvement.RETRAIT);
+        validerDateMouvement(date);
+
         Epargne objectif = servicePortefeuille.getDonnees().getObjectif(idObjectif);
         if (montant > getMontantActuel(objectif)) {
             throw new IllegalStateException("Le montant du retrait ne peut pas dépasser le montant actuellement épargné.");

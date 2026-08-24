@@ -8,6 +8,11 @@ import domain.enumeration.SensMouvement;
     * La classe MouvementEpargne représente un mouvement d'épargne dans le système.
     * Chaque mouvement d'épargne a un montant, un sens (contribution ou retrait), et une date.
     * La classe est utilisée pour suivre les mouvements d'épargne effectués par l'utilisateur, permettant ainsi de gérer les contributions et les retraits d'argent dans le système.
+    *
+    * Elle ne valide plus rien elle-même : la validation (montant strictement positif, sens non
+    * nul, date jamais postérieure au jour) est portée par ServiceEpargne. Toute construction d'un
+    * MouvementEpargne doit obligatoirement passer par ce service — un appel direct au
+    * constructeur ailleurs dans le code contournerait ces règles.
 */
 
 public class MouvementEpargne {
@@ -16,37 +21,12 @@ public class MouvementEpargne {
     private double montant;
     private SensMouvement sens;
     private LocalDate date;
-    
-    public MouvementEpargne(double montant, SensMouvement sens, LocalDate date) 
+
+    public MouvementEpargne(double montant, SensMouvement sens, LocalDate date)
     {
-        validerMontant(montant);
-        validerSens(sens);
-        validerDate(date);
-        
         this.montant = montant;
         this.sens = sens;
         this.date = date;
-    }
-    // Methodes de validation
-    private void validerMontant(double montant) {
-        if (montant <= 0) {
-            throw new IllegalArgumentException("Le montant doit être strictement positif.");
-        }
-    }
-
-    private void validerSens(SensMouvement sens) {
-        if (sens == null) {
-            throw new IllegalArgumentException("Le sens du mouvement est obligatoire.");
-        }
-    }
-
-    private void validerDate(LocalDate date) {
-        if (date == null) {
-            throw new IllegalArgumentException("La date est obligatoire.");
-        }
-        if (date.isAfter(LocalDate.now())) {
-            throw new IllegalArgumentException("La date ne peut pas être dans le futur.");
-        }
     }
 
     // Getters

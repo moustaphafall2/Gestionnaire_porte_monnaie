@@ -10,9 +10,11 @@ import java.util.List;
     * l'argent de côté : un nom, un montant cible, une date limite facultative, et la liste des
     * mouvements (contributions et retraits) qui font évoluer le montant épargné.
     *
-    * Comme les autres entités, elle ne fait que porter sa structure et valider ses propres
-    * champs. Les calculs (montant actuel, pourcentage atteint...) et les règles de gestion
-    * (contribution, retrait, suppression) ont été déplacés vers ServiceEpargne.
+    * Elle ne valide plus rien elle-même : la validation (nom non vide, montant cible strictement
+    * positif) est portée par ServiceEpargne. Toute construction d'une Epargne doit
+    * obligatoirement passer par ce service — un appel direct au constructeur ailleurs dans le
+    * code contournerait ces règles. Les calculs (montant actuel, pourcentage atteint...) et les
+    * règles de gestion (contribution, retrait, suppression) sont eux aussi dans ServiceEpargne.
  */
 public class Epargne {
 
@@ -23,29 +25,11 @@ public class Epargne {
     private List<MouvementEpargne> mouvements;
 
     public Epargne(int id, String nom, double montantCible, LocalDate dateLimite) {
-        validerNom(nom);
-        validerMontantCible(montantCible);
-
         this.id = id;
         this.nom = nom;
         this.montantCible = montantCible;
         this.dateLimite = dateLimite;
         this.mouvements = new ArrayList<>();
-    }
-
-    // Méthodes de validation
-    // Elles ne font rien si la valeur est correcte, et lèvent une exception sinon.
-
-    private void validerNom(String nom) {
-        if (nom == null || nom.isBlank()) {
-            throw new IllegalArgumentException("Le nom de l'objectif est obligatoire.");
-        }
-    }
-
-    private void validerMontantCible(double montantCible) {
-        if (montantCible <= 0) {
-            throw new IllegalArgumentException("Le montant cible doit être strictement positif.");
-        }
     }
 
     // Getters
