@@ -16,25 +16,30 @@ import presentation.view.VueStatistique;
     * aucune exception de sauvegarde à gérer, contrairement aux six écrans précédents.
 */
 public class ControleurStatistique {
-    private VueStatistique vueStatistique;
-    private IServiceStatistique serviceStatistique;
+    private final VueStatistique vueStatistique;
+    private final IServiceStatistique serviceStatistique;
 
     public ControleurStatistique(VueStatistique vueStatistique, IServiceStatistique serviceStatistique) {
         this.vueStatistique = vueStatistique;
         this.serviceStatistique = serviceStatistique;
     }
 
-    // ----- 7. Statistiques -----
+    public void afficherStatistiques() {
+        LocalDate debut = vueStatistique.demanderDateDebut();
+        LocalDate fin = vueStatistique.demanderDateFin();
 
-    public void gererStatistiques() {
-        LocalDate debut = vueStatistique.lireDate("Date de début (JJ/MM/AAAA) : ");
-        LocalDate fin = vueStatistique.lireDate("Date de fin (JJ/MM/AAAA) : ");
+        // La période doit être cohérente (début <= fin) : ServiceStatistique la refuse avec
+        // IllegalArgumentException, comme toute donnée invalide en soi (peu importe l'état du
+        // portefeuille). Attrapée ici, comme les autres erreurs métier.
+        try {
+            Map<Categorie, Double> totauxParCategorie = serviceStatistique.getTotalParCategorie(debut, fin);
+            vueStatistique.afficherTotauxParCategorie(totauxParCategorie);
 
-        Map<Categorie, Double> totauxParCategorie = serviceStatistique.getTotalParCategorie(debut, fin);
-        vueStatistique.afficherTotauxParCategorie(totauxParCategorie);
-
-        double totalRevenus = serviceStatistique.getTotalRevenus(debut, fin);
-        double totalDepenses = serviceStatistique.getTotalDepenses(debut, fin);
-        vueStatistique.afficherTotalRevenusEtDepenses(totalRevenus, totalDepenses);
+            double totalRevenus = serviceStatistique.getTotalRevenus(debut, fin);
+            double totalDepenses = serviceStatistique.getTotalDepenses(debut, fin);
+            vueStatistique.afficherTotalRevenusEtDepenses(totalRevenus, totalDepenses);
+        } catch (IllegalArgumentException erreur) {
+            vueStatistique.afficherErreur(erreur.getMessage());
+        }
     }
 }

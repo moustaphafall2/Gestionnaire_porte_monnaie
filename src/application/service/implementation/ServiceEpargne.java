@@ -28,7 +28,7 @@ public class ServiceEpargne implements IServiceEpargne {
     // soustractions. On compare donc à un epsilon près plutôt qu'avec ==.
     private static final double EPSILON = 0.01;
 
-    private ServicePortefeuille servicePortefeuille;
+    private final ServicePortefeuille servicePortefeuille;
 
     public ServiceEpargne(ServicePortefeuille servicePortefeuille) {
         this.servicePortefeuille = servicePortefeuille;
@@ -86,14 +86,6 @@ public class ServiceEpargne implements IServiceEpargne {
     // un identifiant à l'utilisateur.
     public List<Epargne> getObjectifs() {
         return servicePortefeuille.getDonnees().getObjectifs();
-    }
-
-    // Indique s'il existe au moins un objectif. Le contrôleur en a besoin pour savoir s'il a un
-    // sens de demander un identifiant à l'utilisateur après avoir affiché la liste ; sans cette
-    // méthode, il devrait inspecter lui-même la liste renvoyée par getObjectifs() (list.isEmpty()),
-    // ce qui n'est pas son rôle.
-    public boolean aAuMoinsUnObjectif() {
-        return !getObjectifs().isEmpty();
     }
 
     // Recherche publique d'un objectif par id, utilisée par ControleurEpargne pour récupérer

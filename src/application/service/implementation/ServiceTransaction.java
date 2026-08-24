@@ -19,8 +19,8 @@ import application.service.interfaces.IServiceTransaction;
     * servicePortefeuille.getDonnees() à chaque appel, comme le veut la règle du projet.
 */
 public class ServiceTransaction implements IServiceTransaction {
-    private ServicePortefeuille servicePortefeuille;
-    private ServiceCategorie serviceCategorie;
+    private final ServicePortefeuille servicePortefeuille;
+    private final ServiceCategorie serviceCategorie;
 
     public ServiceTransaction(ServicePortefeuille servicePortefeuille, ServiceCategorie serviceCategorie) {
         this.servicePortefeuille = servicePortefeuille;

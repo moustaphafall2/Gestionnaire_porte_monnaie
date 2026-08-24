@@ -1843,3 +1843,323 @@ empreinte MD5), aucune écriture déclenchée par une simple consultation du sol
 
 Étapes 3 à 5 du CLAUDE.md : DTO, réduction des dépendances autour de `ServicePortefeuille`,
 nettoyage final. Aucune prise d'avance pour l'instant.
+
+## 2026-08-24 — Contrôleurs par domaine, plus aucun aiguillage entre eux
+
+Nouvelle exigence de la maîtresse de stage : le code des contrôleurs était devenu difficile à
+suivre (actions éclatées entre plusieurs méthodes privées enchaînées, noms `gererXxx()` peu
+parlants, `ControleurPrincipal` qui appelait les autres contrôleurs). Cinq règles à appliquer :
+noms de méthode explicites, une action = une méthode, aucun contrôleur n'en appelle un autre,
+un contrôleur par domaine, les règles déjà en vigueur (aucun traitement, aucune chaîne
+utilisateur dans un contrôleur, exceptions attrapées et affichées par la vue) ne changent pas.
+Conception proposée et discutée avant tout code (voir l'échange qui précède cette entrée).
+
+### Ce qui a été écrit
+
+- **`ControleurPortefeuille`** (nouveau) : une seule méthode, `afficherSolde()`, reprise de
+  l'ancienne `ControleurPrincipal.gererVoirSolde()` (qui était privée).
+- **`ControleurCategorie`** : `activerCategorie()`/`desactiverCategorie()`, chacune reprise de
+  l'ancienne méthode privée équivalente, promue publique. Ne dépend plus de
+  `IServicePortefeuille` : elle ne s'en servait que pour la reprise sur échec de sauvegarde,
+  disparue d'ici.
+- **`ControleurTransaction`** : `ajouterDepense()`/`ajouterRevenu()` inchangées à l'intérieur,
+  simplement débarrassées de leur `try/catch (ErreurSauvegardeException)`. `afficherHistorique()`
+  garde les quatre variantes d'affichage (tout/date/catégorie/type) dans une seule méthode, avec
+  son propre sous-menu réduit à cinq lignes (le choix "modifier ou supprimer" en est sorti).
+  `modifierTransaction()`/`supprimerTransaction()` (nouvelles, publiques) reprennent les deux
+  branches de l'ancienne `gererModificationSuppressionTransaction()`, avec chacune son propre
+  `catch (IllegalArgumentException | IllegalStateException)`.
+- **`ControleurEpargne`** : `creerObjectif()`, `contribuerObjectif()`, `retirerObjectif()`,
+  `supprimerObjectif()` reprises des anciennes méthodes privées équivalentes, promues publiques,
+  chacune avec son propre `catch` métier (avant, un seul `catch` partagé couvrait les cinq
+  actions dans `gererObjectifsEpargne()`). `afficherObjectifs()` (nouvelle, reprend
+  `gererConsultationObjectifs()`) comble un nom manquant dans la liste donnée : "voir mes
+  objectifs" n'y figurait pas, ce nom a été proposé et validé avant d'écrire le code.
+- **`ControleurStatistique`** : `gererStatistiques()` renommée `afficherStatistiques()`, rien
+  d'autre ne change.
+- **`ControleurPrincipal` et `ControleurConsole` supprimées.**
+- **`Main.java`** : reprend la boucle du menu principal (inchangée) et, en plus, la lecture des
+  trois sous-menus (historique, épargne, catégories) — chaque vue affiche son sous-menu et
+  renvoie le choix en un seul appel (`demanderChoixMenu()`, `demanderChoixMenuHistorique()`),
+  Main fait directement son `switch` sur cette valeur, sans méthode intermédiaire. La reprise sur
+  échec de sauvegarde (`confirmerNouvelleSauvegarde`, méthode privée statique) est désormais
+  écrite une seule fois ici, autour de l'appel au contrôleur, reprise presque telle quelle depuis
+  `ControleurConsole`.
+- **`VueCategorie`/`VueEpargne`** : `afficherMenuCategories()`/`afficherMenuEpargne()` passées en
+  privé, chacune gagne un `demanderChoixMenu()` public (affiche + lit + renvoie le choix).
+- **`VueTransaction`** : le sous-menu historique se scinde en deux niveaux. Premier niveau,
+  nouveau, `demanderChoixMenuHistorique()` (Consulter/Modifier/Supprimer/Retour). Second niveau,
+  `afficherMenuHistorique()` inchangée dans son rôle mais réduite à cinq lignes (tout/date/
+  catégorie/type/retour), pour l'usage interne d'`afficherHistorique()`.
+  `afficherMenuModifierSupprimer()` a disparu, devenue inutile.
+- **`VuePrincipale`** : `afficherEchecSauvegarde(String)` retirée. Elle ne servait qu'au filet de
+  sécurité de l'ancien `ControleurPrincipal.lancer()`, un `catch` qui ne se déclenchait en
+  pratique jamais (chaque contrôleur attrapait déjà `ErreurSauvegardeException` avant que
+  l'exception ne remonte jusque-là). Vérifié par recherche dans tout le code avant suppression :
+  aucun autre appelant.
+
+### Choix de conception
+
+**Pourquoi la lecture des trois sous-menus atterrit dans `Main`, alors que la consigne ne parlait
+explicitement que du menu principal.** Chaque sous-menu (catégories : activer/désactiver ;
+épargne : créer/contribuer/retirer/afficher/supprimer) proposait un choix entre des actions qui
+ont chacune leur propre nom dans la liste donnée — donc aucune des deux n'a vocation à "porter"
+l'autre. Aucun contrôleur ne peut donc héberger ce choix sans redevenir un aiguilleur, exactement
+le problème que `ControleurPrincipal` posait en plus grand. Seul `Main`, qui connaît déjà
+plusieurs contrôleurs à la fois, peut trancher entre eux sans violer "aucun contrôleur n'en
+appelle un autre". Le cas de l'historique est différent : les quatre variantes d'affichage
+(tout/date/catégorie/type) n'ont qu'un seul nom dans la liste (`afficherHistorique()`) parce que
+ce sont des variantes de la même action, pas des actions séparées — ce choix-là reste donc dans
+le contrôleur, sous cette unique méthode.
+
+**Pourquoi le sous-menu historique se scinde en deux niveaux plutôt que de rester un seul menu à
+six lignes.** Discuté avant de coder : "modifier" et "supprimer" ont chacune leur propre nom dans
+la liste, contrairement aux quatre variantes d'affichage — ce choix devait donc, comme pour les
+catégories et l'épargne, remonter dans `Main`. Faire lire tout le menu à six lignes par `Main`
+directement aurait obligé `Main` à connaître les dates/catégorie/type pour les trois premiers
+choix, c'est-à-dire réimplémenter ce qu'`afficherHistorique()` fait déjà — de la logique de
+contrôleur qui se serait retrouvée dans `Main`. Scinder en "Consulter / Modifier / Supprimer /
+Retour" (Main) puis, à l'intérieur de "Consulter", "Tout / Date / Catégorie / Type / Retour"
+(`afficherHistorique()`) évite ce problème : chaque niveau ne connaît que ce qui le concerne.
+
+**Pourquoi chaque vue "affiche et renvoie le choix" en une seule méthode, plutôt que deux appels
+séparés comme avant.** Consigne explicite : pas de méthode intermédiaire du genre
+`gererMenuXxx()` dans `Main`, qui aurait recréé exactement ce qu'on venait de sortir des
+contrôleurs. En combinant affichage et lecture dans une seule méthode de vue
+(`demanderChoixMenu()`), `Main` peut faire son `switch` directement sur l'appel, sans variable ni
+méthode intermédiaire — tout le cheminement se lit dans la boucle de `Main`, du menu principal
+jusqu'à l'action choisie.
+
+**Pourquoi `Main` appelle `serviceCategorie.getCategoriesActives()` directement avant le
+sous-menu catégories, plutôt que de passer par un contrôleur.** Seule exception à "Main
+n'appelle que des contrôleurs". Avant ce sprint, `ControleurCategorie.gererCategories()`
+affichait les catégories actives avant de proposer le choix ; cet affichage n'appartient à aucune
+des deux actions désormais séparées (`activerCategorie()`/`desactiverCategorie()`), donc il n'a
+pas suivi l'une plus que l'autre en migrant. C'est un simple accès en lecture (un getter, aucun
+calcul), du même ordre que ce qu'un contrôleur aurait fait — la seule différence est que c'est
+`Main` qui le fait, parce que rien d'autre n'en a la responsabilité une fois l'aiguillage retiré
+de `ControleurCategorie`.
+
+### Points à savoir défendre
+
+- **Pourquoi `IllegalArgumentException`/`IllegalStateException` sont-elles attrapées à cinq
+  endroits différents dans `ControleurEpargne` maintenant, au lieu d'un seul avant ?** Parce que
+  ces cinq actions sont désormais cinq méthodes indépendantes, chacune devant se lire seule de
+  haut en bas sans dépendre d'un `try` partagé par un aiguilleur qui n'existe plus. Le prix est un
+  peu de répétition (la même ligne de `catch` cinq fois) ; le gain est qu'aucune méthode ne
+  dépend plus d'une autre pour être comprise.
+- **`ErreurSauvegardeException` n'est catchée nulle part dans les contrôleurs — n'est-ce pas
+  risqué ?** Non : c'est une exception non vérifiée (`RuntimeException`), Java ne l'exige pas.
+  Elle remonte naturellement jusqu'au seul `catch` qui la concerne, dans `Main`, exactement comme
+  prévu. Les exceptions métier, elles, sont attrapées localement parce que `Main` ne doit jamais
+  avoir à connaître une règle de gestion propre à un écran particulier.
+- **`getDonnees()` est-elle toujours protégée après ce remaniement ?** Oui, revérifié
+  concrètement, même méthode qu'aux étapes précédentes : un fichier de test placé dans
+  `presentation.controller` qui tente `servicePortefeuille.getDonnees()` refuse toujours de
+  compiler. Ce sprint n'a touché qu'à la façon dont les contrôleurs sont organisés et appelés,
+  jamais à la protection du `Portefeuille` en mémoire.
+
+### Pièges rencontrés
+
+Aucun — chaque fichier a été vérifié par une compilation complète avant de passer au suivant, et
+l'application a été rejouée de bout en bout (les huit écrans, y compris les nouveaux sous-menus
+à deux niveaux de l'historique) sur les vraies données de `portefeuille.json`, sans jamais
+confirmer une écriture : fichier resté identique après coup (vérifié par empreinte MD5).
+
+### Reste à faire
+
+Étapes 3 à 5 du CLAUDE.md, inchangées : DTO, réduction des dépendances autour de
+`ServicePortefeuille`, nettoyage final.
+
+## 2026-08-24 — Corrections après revue sur les contrôleurs
+
+Retour de revue sur le sprint précédent (restructuration des contrôleurs par domaine), avec des
+corrections précises à appliquer, et deux points explicitement écartés.
+
+### Ce qui a été écrit
+
+- **Champs `final`** : tous les champs d'instance des cinq contrôleurs et des cinq services (plus
+  `PortefeuilleRepository` dans `ServicePortefeuille`) sont maintenant `final`. Aucun n'était
+  réaffecté après le constructeur ; `final` le rend visible dans la signature du champ plutôt que
+  de dépendre d'une relecture attentive du reste de la classe.
+- **`ServiceStatistique`** : nouvelle méthode privée `validerPeriode(debut, fin)`, appelée en
+  première ligne des trois méthodes publiques. Lève `IllegalArgumentException` si `debut` est
+  postérieur à `fin`. **`ControleurStatistique.afficherStatistiques()`** : les trois appels de
+  service sont maintenant dans un `try`, avec un `catch (IllegalArgumentException erreur)` qui
+  transmet le message à la vue — premier `try/catch` de ce contrôleur, qui était jusque-là
+  entièrement en lecture seule sans jamais avoir eu besoin d'en attraper.
+- **`ControleurEpargne.contribuerObjectif()`** : `afficherSoldeDisponible(...)` passe avant
+  `lireMontant("Montant à ajouter : ")`, pas après. L'utilisateur voit maintenant combien il peut
+  se permettre de donner avant qu'on le lui demande, plutôt qu'après avoir déjà répondu.
+- **`ControleurEpargne.afficherObjectifs()`** : le test `if (!serviceEpargne.aAuMoinsUnObjectif())`
+  a disparu. La méthode demande directement un identifiant ; si aucun objectif n'existe (ou si
+  l'identifiant ne correspond à rien), `serviceEpargne.getObjectif(id)` lève
+  `IllegalArgumentException`, déjà attrapée par le `catch` existant de cette méthode. Le
+  contrôleur n'a donc plus besoin de vérifier une condition que le service vérifie déjà.
+  **`aAuMoinsUnObjectif()`** est retirée de `ServiceEpargne` et `IServiceEpargne` : plus aucun
+  appelant après ce retrait.
+- **`ControleurTransaction.afficherHistorique()`** : éclatée en quatre méthodes publiques —
+  `afficherHistorique()` (tout, sans filtre), `filtrerParDate()`, `filtrerParCategorie()`,
+  `filtrerParType()` — chacune une seule action, sans sous-menu interne. **`VueTransaction`** :
+  le sous-menu historique redevient un seul niveau à sept lignes (les six actions désormais
+  toutes nommées, plus "Retour"), au lieu des deux niveaux de l'étape précédente. **`Main`** : le
+  `case 4` du menu principal fait maintenant un `switch` à six branches (une par action) sur la
+  valeur renvoyée par `vueTransaction.demanderChoixMenuHistorique()`, au lieu de deux niveaux de
+  `switch` imbriqués.
+
+### Ce qui n'a pas été touché, sur demande explicite
+
+Pas d'interfaces de vue, pas de `VuePortefeuille` séparée de `VuePrincipale`, pas de
+factorisation des blocs `catch` répétés entre les méthodes des contrôleurs, pas de factorisation
+d'une méthode `verifierCategorieDisponible()` partagée entre `ajouterDepense()`,
+`ajouterRevenu()` et `modifierTransaction()`. Ces quatre pistes de simplification ont été
+examinées en revue et écartées : la répétition qui reste est jugée plus lisible que
+l'abstraction qui l'aurait remplacée.
+
+### Choix de conception
+
+**Pourquoi `afficherHistorique()` redevient quatre méthodes distinctes, après avoir été gardée
+volontairement fusionnée à l'étape précédente.** À l'étape précédente, la justification pour
+garder les quatre variantes ensemble était qu'aucune des quatre n'apparaissait séparément dans la
+liste de noms donnée à l'époque. Ce sprint revient sur cette lecture : une fois
+`modifierTransaction()`/`supprimerTransaction()` sorties de l'écran historique (déjà fait à
+l'étape précédente), il devenait incohérent que les quatre variantes d'affichage restent, elles,
+cachées derrière un sous-menu interne au contrôleur alors que toutes les autres actions de
+l'application (catégories, épargne, modifier/supprimer une transaction) passent par un choix lu
+directement dans `Main`. Aligner l'historique sur ce même patron — un seul niveau de menu, lu par
+`Main`, chaque choix vers sa propre méthode — supprime cette exception et simplifie `Main` (un
+seul `switch` par écran au lieu de deux imbriqués pour l'historique seulement).
+
+**Pourquoi `validerPeriode()` est privée et appelée trois fois plutôt qu'une validation faite une
+seule fois dans le contrôleur.** La règle "la date de début ne peut pas être postérieure à la
+date de fin" est une règle de gestion sur des données, pas une question d'affichage : elle doit
+vivre dans le service (comme toutes les validations de ce type dans ce projet), pas dans le
+contrôleur. Elle est appelée dans les trois méthodes publiques de `ServiceStatistique` plutôt que
+mutualisée autrement parce que les trois sont des points d'entrée indépendants (rien ne garantit
+qu'elles seront toujours appelées ensemble) : chacune doit rester valide seule.
+
+**Pourquoi retirer `aAuMoinsUnObjectif()` plutôt que la garder "au cas où".** Elle dupliquait une
+protection qui existait déjà ailleurs (`getObjectif()` refuse déjà un identifiant inconnu) sans
+rien ajouter que `afficherObjectifs()` n'ait pas déjà par son propre `catch`. La garder aurait
+laissé deux façons différentes de refuser la même situation (liste vide vs identifiant
+introuvable), pour un seul et même problème.
+
+### Points à savoir défendre
+
+- **`afficherObjectifs()` ne vérifie plus explicitement que la liste n'est pas vide — n'est-ce
+  pas moins sûr ?** Non : la protection n'a pas disparu, elle est juste devenue unique. Avant, il
+  y avait deux gardes-fous pour la même situation (liste vide dans le contrôleur, identifiant
+  introuvable dans le service) ; il n'en reste qu'un, mais il n'a jamais cessé d'exister, et il
+  couvre exactement les mêmes cas (liste vide *et* identifiant erroné sur une liste non vide).
+- **Pourquoi `ControleurStatistique` a-t-il maintenant un `try/catch`, lui qui n'en avait jamais
+  eu besoin ?** Parce qu'avant ce sprint, aucune règle de gestion ne portait sur la période
+  demandée : n'importe quelles dates passaient. La règle "début <= fin" est nouvelle, portée par
+  le service comme toute règle de ce type ; le contrôleur doit donc, comme les autres écrans,
+  attraper l'exception métier qu'elle peut désormais lever.
+- **`getDonnees()` est-elle toujours protégée après ces changements ?** Oui, revérifié
+  concrètement une nouvelle fois : aucun de ces changements ne touche à `ServicePortefeuille` ni
+  à la visibilité de paquet qui protège son `Portefeuille`.
+
+### Pièges rencontrés
+
+Aucun — chaque changement a été vérifié par une compilation complète, et l'application a été
+rejouée de bout en bout sur les vraies données de `portefeuille.json`, y compris les deux
+nouveaux chemins d'erreur (période invalide en statistiques, identifiant d'objectif inexistant),
+pour confirmer qu'ils affichent un message lisible au lieu de planter. Fichier resté identique
+après coup (vérifié par empreinte MD5).
+
+### Reste à faire
+
+Étapes 3 à 5 du CLAUDE.md, inchangées : DTO, réduction des dépendances autour de
+`ServicePortefeuille`, nettoyage final.
+
+## 2026-08-24 — Étape 3 (fin) : les invites de saisie sortent des contrôleurs
+
+Deuxième retour de revue sur l'étape 3. Deux corrections : le nom des quatre méthodes
+d'affichage de l'historique, et surtout une incohérence relevée sur la règle "aucune chaîne
+destinée à l'utilisateur dans un contrôleur" — respectée pour les messages affichés, pas pour
+les invites de saisie (`vueEpargne.lireMontant("Montant cible : ")` reste un contrôleur qui
+choisit un texte, même si ce texte sert à demander plutôt qu'à afficher).
+
+### Ce qui a été écrit
+
+- **`ControleurTransaction`** : `afficherHistorique()`, `filtrerParDate()`,
+  `filtrerParCategorie()`, `filtrerParType()` renommées `afficherHistoriqueComplet()`,
+  `afficherHistoriqueParDate()`, `afficherHistoriqueParCategorie()`,
+  `afficherHistoriqueParType()`. Les quatre affichent, avec un filtre différent ; un nom en
+  `filtrerXxx()` laissait croire que c'était le contrôleur qui filtrait, alors que c'est
+  toujours `ServiceTransaction`.
+- **`VueCategorie`** : déjà conforme, sert de référence pour le reste — inchangée.
+- **`VueEpargne`, `VueTransaction`, `VueStatistique`, `VuePrincipale`** : chacune gagne des
+  méthodes `demanderXxx()` dédiées, sans paramètre `message`, le texte fixé à l'intérieur
+  (`demanderNomObjectif()`, `demanderMontantDepense()`, `demanderIdentifiantAModifier()`,
+  `demanderDateDebut()`, `demanderChoix()`...). Les méthodes génériques de `VueConsole`
+  (`lireEntier`, `lireLigne`, `lireMontant`, `lireDate`, `confirmer`) ne sont plus appelées
+  qu'à l'intérieur des vues elles-mêmes.
+- **Les cinq contrôleurs et `Main`** : chaque appel du genre `vueXxx.lireMontant("...")` devient
+  `vueXxx.demanderMontantXxx()`. Plus aucune chaîne de caractères, quelle qu'elle soit, dans le
+  code d'un contrôleur — vérifié par recherche systématique après coup.
+- **`ControleurTransaction`** : la méthode privée `choisirTransaction(String)` disparaît.
+  `modifierTransaction()` et `supprimerTransaction()` avaient besoin du même texte
+  d'introduction ("afficher l'historique") mais de deux invites différentes pour l'identifiant ;
+  comme le texte ne peut plus être un paramètre, chacune appelle directement
+  `afficherHistoriqueComplet()` (sa méthode sœur publique, pas une méthode privée dédiée) puis
+  sa propre méthode `demanderIdentifiantAModifier()`/`demanderIdentifiantASupprimer()`.
+- Quelques textes identiques entre deux actions ont été mutualisés dans une seule méthode de
+  vue plutôt que dupliqués : `VueEpargne.demanderIdentifiantObjectif()` ("Identifiant de
+  l'objectif : ", utilisée par `contribuerObjectif()` et `retirerObjectif()`) et
+  `VueEpargne.demanderDate()` ("Date (JJ/MM/AAAA, vide = aujourd'hui) : ", mêmes deux
+  appelantes) ; `VueTransaction.demanderDate()`/`demanderDescription()` (mêmes textes pour
+  `ajouterDepense()` et `ajouterRevenu()`).
+
+### Choix de conception
+
+**Pourquoi le gain n'est pas cosmétique.** Un contrôleur qui écrit
+`vueEpargne.lireMontant("Montant cible : ")` connaît un détail de présentation : la formulation
+exacte de l'invite. Si la console était remplacée par une interface graphique demain, ce texte
+n'aurait plus de sens tel quel (un champ de formulaire n'a pas besoin d'une phrase avec ":" à la
+fin) — le contrôleur devrait être modifié en même temps que la vue. Avec
+`vueEpargne.demanderMontantCible()`, le contrôleur ne sait même pas qu'il y a un texte : seule
+`VueEpargne` changerait.
+
+**Pourquoi certaines invites sont mutualisées et d'autres non, alors que le texte semble parfois
+proche.** Seuls les textes strictement identiques entre deux appelantes ont été mutualisés
+(`demanderIdentifiantObjectif()`, `demanderDate()` dans les deux vues concernées). "Montant à
+ajouter" et "Montant à retirer", par exemple, ne le sont pas : les textes diffèrent, donc les
+méthodes restent séparées (`demanderMontantContribution()`, `demanderMontantRetrait()`) — le
+critère est le texte réellement affiché, pas la ressemblance de ce que fait le contrôleur.
+
+**Pourquoi `choisirTransaction(String)` disparaît au lieu de perdre juste son paramètre.** Une
+méthode privée partagée n'a de sens que si elle fait la même chose pour ses appelantes ; ici,
+la seule partie vraiment commune (afficher l'historique) est déjà une méthode publique complète
+à elle seule (`afficherHistoriqueComplet()`), et la partie qui différait (le texte de l'invite)
+ne pouvait plus être un paramètre. Il ne restait donc rien à factoriser dans une méthode privée
+séparée.
+
+### Points à savoir défendre
+
+- **Les vues ont grossi (jusqu'à 185 lignes pour `VueTransaction`) — n'est-ce pas devenu trop
+  long ?** Vérifié : non, chaque nouvelle méthode fait une à trois lignes, regroupées par écran
+  dans l'ordre où elles servent. C'est le prix annoncé à l'avance ("ça va multiplier les
+  méthodes dans les vues") pour que les contrôleurs restent muets sur ce qu'ils demandent, pas
+  un signe de dérive.
+- **Comment as-tu vérifié qu'il ne restait plus aucune chaîne dans les contrôleurs, et pas
+  seulement les invites visées par la revue ?** Recherche de toutes les occurrences de `"` dans
+  les cinq fichiers de `presentation.controller` après les corrections : les seules restantes
+  sont dans des commentaires (blocs `/* */` et `//`), aucune dans le code exécutable.
+- **Le comportement de l'application a-t-il changé ?** Non, vérifié concrètement : la sortie
+  console d'un même scénario de test, rejouée avant et après cette correction, est identique à
+  l'octet près (comparée par `diff`). Seuls les noms de méthodes ont changé, jamais les textes
+  affichés ni la logique.
+
+### Pièges rencontrés
+
+Aucun — chaque vue a été corrigée puis recompilée avant de passer à la suivante, et le scénario
+de test de bout en bout (les huit écrans, y compris les deux chemins d'erreur ajoutés
+précédemment) a été rejoué sur les vraies données de `portefeuille.json` pour confirmer une
+sortie identique à celle d'avant la correction.
+
+### Reste à faire
+
+Étape 3 terminée. Étapes 4 à 6 du CLAUDE.md, à venir sur demande : DTO, réduction des
+dépendances autour de `ServicePortefeuille`, nettoyage final.

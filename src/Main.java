@@ -1,16 +1,18 @@
 import presentation.controller.ControleurCategorie;
 import presentation.controller.ControleurEpargne;
-import presentation.controller.ControleurPrincipal;
+import presentation.controller.ControleurPortefeuille;
 import presentation.controller.ControleurStatistique;
 import presentation.controller.ControleurTransaction;
 import domain.entity.Portefeuille;
 import exception.ErreurChargementException;
+import exception.ErreurSauvegardeException;
 import infrastructure.persistence.GestionnaireFichier;
 import application.service.implementation.ServiceCategorie;
 import application.service.implementation.ServiceEpargne;
 import application.service.implementation.ServicePortefeuille;
 import application.service.implementation.ServiceStatistique;
 import application.service.implementation.ServiceTransaction;
+import application.service.interfaces.IServicePortefeuille;
 import presentation.view.VueCategorie;
 import presentation.view.VueEpargne;
 import presentation.view.VuePrincipale;
@@ -19,12 +21,22 @@ import presentation.view.VueTransaction;
 
 /*
     * Point d'entrée du programme. Son unique rôle est d'initialiser les objets nécessaires
-    * (GestionnaireFichier, Portefeuille, les services, les vues, les contrôleurs) et de
-    * démarrer la boucle principale. C'est ici, et seulement ici, que les dépendances entre
-    * services et contrôleurs sont reliées.
+    * (GestionnaireFichier, Portefeuille, les services, les vues, les contrôleurs), de tenir la
+    * boucle du menu principal et d'aiguiller chaque choix vers le contrôleur concerné. C'est ici,
+    * et seulement ici, que les dépendances entre services et contrôleurs sont reliées, et que
+    * plusieurs contrôleurs différents sont appelés depuis un même endroit — un contrôleur, lui,
+    * n'en appelle jamais un autre.
     *
-    * Migration vue/contrôleur terminée : les sept écrans du menu principal ont chacun leur
-    * contrôleur dédié (ControleurPrincipal ne garde que le menu et l'écran "voir le solde").
+    * Chaque vue affiche son propre menu ou sous-menu et renvoie directement le choix lu
+    * (VuePrincipale.demanderChoix(), VueCategorie.demanderChoixMenu(),
+    * VueEpargne.demanderChoixMenu(), VueTransaction.demanderChoixMenuHistorique()) : Main fait
+    * son switch directement sur cette valeur, sans méthode intermédiaire ni le moindre texte à
+    * lui, pour que tout le cheminement de l'application se lise ici, à un seul endroit.
+    *
+    * La reprise après un échec de sauvegarde est traitée une seule fois, autour de l'appel au
+    * contrôleur : avant, chaque contrôleur qui modifiait des données héritait cette logique de
+    * ControleurConsole. Cette classe a disparu avec ControleurPrincipal (qui n'était plus qu'un
+    * aiguilleur entre contrôleurs, un rôle que Main tient déjà par nature).
 */
 public class Main {
     public static void main(String[] args) {
@@ -54,13 +66,93 @@ public class Main {
         VueEpargne vueEpargne = new VueEpargne();
         VueCategorie vueCategorie = new VueCategorie();
         VueStatistique vueStatistique = new VueStatistique();
+
+        ControleurPortefeuille controleurPortefeuille = new ControleurPortefeuille(vuePrincipale, servicePortefeuille);
         ControleurTransaction controleurTransaction = new ControleurTransaction(vueTransaction, serviceTransaction,
                 serviceCategorie, servicePortefeuille);
         ControleurEpargne controleurEpargne = new ControleurEpargne(vueEpargne, serviceEpargne, servicePortefeuille);
-        ControleurCategorie controleurCategorie = new ControleurCategorie(vueCategorie, serviceCategorie, servicePortefeuille);
+        ControleurCategorie controleurCategorie = new ControleurCategorie(vueCategorie, serviceCategorie);
         ControleurStatistique controleurStatistique = new ControleurStatistique(vueStatistique, serviceStatistique);
-        ControleurPrincipal controleurPrincipal = new ControleurPrincipal(vuePrincipale, servicePortefeuille,
-                controleurTransaction, controleurEpargne, controleurCategorie, controleurStatistique);
-        controleurPrincipal.lancer();
+
+        boolean continuer = true;
+
+        while (continuer) {
+            int choix = vuePrincipale.demanderChoix();
+
+            // Attrapée ici, au niveau le plus haut, pour couvrir toutes les actions d'un coup :
+            // quelle que soit celle en cours, un échec d'écriture disque ne doit jamais faire
+            // planter l'application. Les données restent valides en mémoire pour la suite de la
+            // session (l'opération elle-même a déjà eu lieu avant l'échec de la sauvegarde),
+            // seule l'écriture sur le disque a échoué.
+            try {
+                switch (choix) {
+                    case 1 -> controleurPortefeuille.afficherSolde();
+                    case 2 -> controleurTransaction.ajouterDepense();
+                    case 3 -> controleurTransaction.ajouterRevenu();
+                    case 4 -> {
+                        switch (vueTransaction.demanderChoixMenuHistorique()) {
+                            case 1 -> controleurTransaction.afficherHistoriqueComplet();
+                            case 2 -> controleurTransaction.afficherHistoriqueParDate();
+                            case 3 -> controleurTransaction.afficherHistoriqueParCategorie();
+                            case 4 -> controleurTransaction.afficherHistoriqueParType();
+                            case 5 -> controleurTransaction.modifierTransaction();
+                            case 6 -> controleurTransaction.supprimerTransaction();
+                            default -> { }
+                        }
+                    }
+                    case 5 -> {
+                        switch (vueEpargne.demanderChoixMenu()) {
+                            case 1 -> controleurEpargne.creerObjectif();
+                            case 2 -> controleurEpargne.contribuerObjectif();
+                            case 3 -> controleurEpargne.retirerObjectif();
+                            case 4 -> controleurEpargne.afficherObjectifs();
+                            case 5 -> controleurEpargne.supprimerObjectif();
+                            default -> { }
+                        }
+                    }
+                    case 6 -> {
+                        // Seul appel de service fait directement par Main plutôt que par un
+                        // contrôleur : afficher les catégories actives avant de proposer le
+                        // sous-menu vivait dans ControleurCategorie.gererCategories(), qui a
+                        // disparu avec le reste de l'aiguillage. Un simple getter, sans calcul.
+                        vueCategorie.afficherCategoriesActives(serviceCategorie.getCategoriesActives());
+                        switch (vueCategorie.demanderChoixMenu()) {
+                            case 1 -> controleurCategorie.activerCategorie();
+                            case 2 -> controleurCategorie.desactiverCategorie();
+                            default -> { }
+                        }
+                    }
+                    case 7 -> controleurStatistique.afficherStatistiques();
+                    case 8 -> continuer = false;
+                    default -> vuePrincipale.afficherChoixInvalide();
+                }
+            } catch (ErreurSauvegardeException erreur) {
+                confirmerNouvelleSauvegarde(vuePrincipale, servicePortefeuille, erreur);
+            }
+        }
+
+        vuePrincipale.afficherAuRevoir();
+    }
+
+    // Réessaie uniquement l'écriture sur le disque, jamais l'action elle-même : elle a déjà eu
+    // lieu en mémoire au moment où le contrôleur appelé ci-dessus a levé cette exception (voir
+    // ServicePortefeuille.sauvegarder()). Tant que l'utilisateur accepte de réessayer, on
+    // rappelle directement servicePortefeuille.sauvegarder() ; s'il refuse, l'application
+    // continue sans bloquer, avec un message clair sur les données non encore enregistrées.
+    // Anciennement ControleurConsole.confirmerNouvelleSauvegarde(), héritée par trois
+    // contrôleurs ; écrite une seule fois ici, puisque plus aucun contrôleur ne la porte.
+    private static void confirmerNouvelleSauvegarde(VuePrincipale vuePrincipale, IServicePortefeuille servicePortefeuille,
+            ErreurSauvegardeException erreur) {
+        String messageErreur = erreur.getMessage();
+        while (vuePrincipale.demanderNouvelleTentativeSauvegarde(messageErreur)) {
+            try {
+                servicePortefeuille.sauvegarder();
+                vuePrincipale.afficherSauvegardeReussie();
+                return;
+            } catch (ErreurSauvegardeException nouvelleErreur) {
+                messageErreur = nouvelleErreur.getMessage();
+            }
+        }
+        vuePrincipale.afficherSauvegardeAbandonnee();
     }
 }

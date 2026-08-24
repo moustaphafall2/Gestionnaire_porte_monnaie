@@ -17,7 +17,7 @@ import application.service.interfaces.IServiceCategorie;
     * responsabilité du service, jamais de l'entité.
 */
 public class ServiceCategorie implements IServiceCategorie{
-    private ServicePortefeuille servicePortefeuille;
+    private final ServicePortefeuille servicePortefeuille;
 
     public ServiceCategorie(ServicePortefeuille servicePortefeuille) {
         this.servicePortefeuille = servicePortefeuille;

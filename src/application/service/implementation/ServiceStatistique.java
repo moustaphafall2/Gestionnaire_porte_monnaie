@@ -22,14 +22,23 @@ import application.service.interfaces.IServiceStatistique;
     * servicePortefeuille.getDonnees() pour lire les transactions.
 */
 public class ServiceStatistique implements IServiceStatistique {
-    private ServicePortefeuille servicePortefeuille;
+    private final ServicePortefeuille servicePortefeuille;
 
     public ServiceStatistique(ServicePortefeuille servicePortefeuille) {
         this.servicePortefeuille = servicePortefeuille;
     }
 
+    // Une période où la date de fin précède la date de début n'a pas de sens : aucune
+    // transaction ne peut jamais la satisfaire, ce n'est pas une donnée valide en soi.
+    private void validerPeriode(LocalDate debut, LocalDate fin) {
+        if (debut.isAfter(fin)) {
+            throw new IllegalArgumentException("La date de début ne peut pas être postérieure à la date de fin.");
+        }
+    }
+
     // Total dépensé par catégorie, sur une période donnée
     public Map<Categorie, Double> getTotalParCategorie(LocalDate debut, LocalDate fin) {
+        validerPeriode(debut, fin);
         Map<Categorie, Double> totaux = new HashMap<>();
 
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
@@ -52,6 +61,7 @@ public class ServiceStatistique implements IServiceStatistique {
     // (totaux[0], totaux[1]) qu'il devrait lui-même extraire, ce qui est une manipulation de
     // donnée qui n'a rien à faire dans un contrôleur.
     public double getTotalRevenus(LocalDate debut, LocalDate fin) {
+        validerPeriode(debut, fin);
         double totalRevenus = 0;
 
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
@@ -69,6 +79,7 @@ public class ServiceStatistique implements IServiceStatistique {
 
     // Symétrique de getTotalRevenus(), pour les dépenses.
     public double getTotalDepenses(LocalDate debut, LocalDate fin) {
+        validerPeriode(debut, fin);
         double totalDepenses = 0;
 
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {

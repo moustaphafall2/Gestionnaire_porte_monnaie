@@ -23,8 +23,8 @@ import infrastructure.persistence.PortefeuilleRepository;
     * GestionnaireFichier.
 */
 public class ServicePortefeuille implements IServicePortefeuille {
-    private Portefeuille portefeuille;
-    private PortefeuilleRepository portefeuilleRepository;
+    private final Portefeuille portefeuille;
+    private final PortefeuilleRepository portefeuilleRepository;
 
     public ServicePortefeuille(Portefeuille portefeuille, PortefeuilleRepository portefeuilleRepository) {
         this.portefeuille = portefeuille;

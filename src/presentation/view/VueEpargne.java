@@ -16,13 +16,20 @@ import domain.entity.MouvementEpargne;
 */
 public class VueEpargne extends VueConsole {
 
-    public void afficherMenuEpargne() {
+    private void afficherMenuEpargne() {
         afficherMessage("1. Créer un objectif");
         afficherMessage("2. Contribuer à un objectif");
         afficherMessage("3. Retirer d'un objectif");
         afficherMessage("4. Voir mes objectifs");
         afficherMessage("5. Supprimer un objectif");
         afficherMessage("6. Retour");
+    }
+
+    // Affiche le sous-menu et lit le choix en un seul appel : Main n'a plus besoin d'une méthode
+    // intermédiaire pour ça, il fait directement son switch sur la valeur renvoyée ici.
+    public int demanderChoixMenu() {
+        afficherMenuEpargne();
+        return lireEntier("Votre choix : ");
     }
 
     public void afficherAucunObjectif() {
@@ -64,11 +71,21 @@ public class VueEpargne extends VueConsole {
         }
     }
 
+    // Le nom se lit en texte libre : aucune contrainte de format, seule Epargne validera qu'il
+    // n'est pas vide.
+    public String demanderNomObjectif() {
+        return lireLigne("Nom de l'objectif : ");
+    }
+
+    public double demanderMontantCible() {
+        return lireMontant("Montant cible : ");
+    }
+
     // Variante de lireDate() pour un champ facultatif (la date limite d'un objectif) : une
     // saisie vide renvoie null plutôt que la date du jour, et une date future est autorisée
     // (un objectif peut viser une échéance à venir, contrairement à une transaction).
-    public LocalDate lireDateLimite(String message) {
-        String saisie = lireLigne(message);
+    public LocalDate demanderDateLimite() {
+        String saisie = lireLigne("Date limite (JJ/MM/AAAA, facultative, vide = aucune) : ");
         if (saisie.isEmpty()) {
             return null;
         }
@@ -84,12 +101,32 @@ public class VueEpargne extends VueConsole {
         afficherMessage(String.format("Récapitulatif : \"%s\", cible %.2f FCFA", nom, montantCible));
     }
 
+    public boolean demanderConfirmationCreation() {
+        return confirmer("Confirmer la création de cet objectif ?");
+    }
+
     public void afficherObjectifCree() {
         afficherMessage("Objectif créé.");
     }
 
+    // Même texte pour contribuerObjectif() et retirerObjectif() : les deux désignent l'objectif
+    // concerné de la même façon, avant de demander autre chose de spécifique à l'opération.
+    public int demanderIdentifiantObjectif() {
+        return lireEntier("Identifiant de l'objectif : ");
+    }
+
     public void afficherSoldeDisponible(double soldeDisponible) {
         afficherMessage(String.format("Solde disponible actuel : %.2f FCFA", soldeDisponible));
+    }
+
+    public double demanderMontantContribution() {
+        return lireMontant("Montant à ajouter : ");
+    }
+
+    // Même texte pour contribuerObjectif() et retirerObjectif() : la date de l'opération se
+    // demande de la même façon dans les deux cas.
+    public LocalDate demanderDate() {
+        return lireDate("Date (JJ/MM/AAAA, vide = aujourd'hui) : ");
     }
 
     public void afficherAvertissementDepassementCible() {
@@ -100,16 +137,40 @@ public class VueEpargne extends VueConsole {
         afficherMessage(String.format("Récapitulatif : %.2f FCFA vers \"%s\" le %s", montant, nomObjectif, date.format(FORMAT_DATE)));
     }
 
+    public boolean demanderConfirmationContribution() {
+        return confirmer("Confirmer cette contribution ?");
+    }
+
     public void afficherContributionEnregistree() {
         afficherMessage("Contribution enregistrée.");
+    }
+
+    public double demanderMontantRetrait() {
+        return lireMontant("Montant à retirer : ");
     }
 
     public void afficherRecapitulatifRetrait(double montant, String nomObjectif, LocalDate date) {
         afficherMessage(String.format("Récapitulatif : %.2f FCFA retirés de \"%s\" le %s", montant, nomObjectif, date.format(FORMAT_DATE)));
     }
 
+    public boolean demanderConfirmationRetrait() {
+        return confirmer("Confirmer ce retrait ?");
+    }
+
     public void afficherRetraitEnregistre() {
         afficherMessage("Retrait enregistré.");
+    }
+
+    public int demanderIdentifiantDetail() {
+        return lireEntier("Identifiant de l'objectif à détailler (0 pour revenir) : ");
+    }
+
+    public int demanderIdentifiantSuppression() {
+        return lireEntier("Identifiant de l'objectif à supprimer : ");
+    }
+
+    public boolean demanderConfirmationSuppression() {
+        return confirmer("Confirmer la suppression de cet objectif ?");
     }
 
     public void afficherObjectifSupprime() {

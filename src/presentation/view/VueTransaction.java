@@ -11,9 +11,9 @@ import domain.enumeration.TypeTransaction;
     * VueTransaction affiche les écrans "Ajouter une dépense", "Ajouter un revenu" et "Voir
     * l'historique des transactions" (consultation, filtres, modification, suppression). Comme
     * VuePrincipale, elle hérite de VueConsole pour ses briques de saisie/affichage générales
-    * (lireMontant, lireDate, confirmer...) et n'ajoute que ce qui est propre à ces écrans :
-    * le contrôleur ne construit aucun texte à afficher, il ne fait que lui transmettre les
-    * valeurs obtenues des services.
+    * (lireMontant, lireDate, confirmer...), gardées internes à cette classe : le contrôleur ne
+    * connaît le texte d'aucune invite ni d'aucun message, il appelle des méthodes nommées pour
+    * ce qu'elles demandent ou affichent, et ne reçoit que la valeur saisie ou rien du tout.
 */
 public class VueTransaction extends VueConsole {
 
@@ -41,10 +41,24 @@ public class VueTransaction extends VueConsole {
         }
     }
 
+    public double demanderMontantDepense() {
+        return lireMontant("Montant de la dépense : ");
+    }
+
+    public double demanderMontantRevenu() {
+        return lireMontant("Montant du revenu : ");
+    }
+
+    // Même texte pour l'ajout d'une dépense et d'un revenu : la date de la transaction se
+    // demande de la même façon dans les deux cas.
+    public LocalDate demanderDate() {
+        return lireDate("Date (JJ/MM/AAAA, vide = aujourd'hui) : ");
+    }
+
     // Une description vide n'est pas une erreur : la transaction n'a simplement pas de
-    // description (champ facultatif).
-    public String demanderDescription(String message) {
-        String saisie = lireLigne(message);
+    // description (champ facultatif). Même texte pour l'ajout d'une dépense et d'un revenu.
+    public String demanderDescription() {
+        String saisie = lireLigne("Description (facultative) : ");
         return saisie.isEmpty() ? null : saisie;
     }
 
@@ -54,6 +68,14 @@ public class VueTransaction extends VueConsole {
 
     public void afficherAvertissementSoldeNegatif(double soldeApres) {
         afficherMessage(String.format("Attention : cette dépense rendra votre solde négatif (nouveau solde : %.2f FCFA).", soldeApres));
+    }
+
+    public boolean demanderConfirmationDepense() {
+        return confirmer("Confirmer l'enregistrement de cette dépense ?");
+    }
+
+    public boolean demanderConfirmationRevenu() {
+        return confirmer("Confirmer l'enregistrement de ce revenu ?");
     }
 
     public void afficherDepenseEnregistree() {
@@ -66,18 +88,32 @@ public class VueTransaction extends VueConsole {
 
     // ----- 4. Historique -----
 
-    public void afficherMenuHistorique() {
+    public LocalDate demanderDateDebut() {
+        return lireDate("Date de début (JJ/MM/AAAA) : ");
+    }
+
+    public LocalDate demanderDateFin() {
+        return lireDate("Date de fin (JJ/MM/AAAA) : ");
+    }
+
+    // Un seul niveau : les six actions de l'écran historique, chacune avec sa propre méthode de
+    // contrôleur (afficherHistorique, filtrerParDate, filtrerParCategorie, filtrerParType,
+    // modifierTransaction, supprimerTransaction), donc chacune sa propre entrée ici.
+    private void afficherMenuHistorique() {
         afficherMessage("1. Tout afficher");
         afficherMessage("2. Filtrer par date");
         afficherMessage("3. Filtrer par catégorie");
         afficherMessage("4. Filtrer par type");
-        afficherMessage("5. Modifier ou supprimer une transaction");
-        afficherMessage("6. Retour");
+        afficherMessage("5. Modifier une transaction");
+        afficherMessage("6. Supprimer une transaction");
+        afficherMessage("7. Retour");
     }
 
-    public void afficherMenuModifierSupprimer() {
-        afficherMessage("1. Modifier");
-        afficherMessage("2. Supprimer");
+    // Affiche ce menu et lit le choix en un seul appel : Main fait directement son switch sur la
+    // valeur renvoyée ici, sans méthode intermédiaire.
+    public int demanderChoixMenuHistorique() {
+        afficherMenuHistorique();
+        return lireEntier("Votre choix : ");
     }
 
     // Affiche chaque transaction (via son toString(), déjà écrit dans l'entité), ou un message
@@ -114,8 +150,33 @@ public class VueTransaction extends VueConsole {
         }
     }
 
+    public int demanderIdentifiantAModifier() {
+        return lireEntier("Identifiant de la transaction à modifier (0 pour annuler) : ");
+    }
+
+    public double demanderNouveauMontant() {
+        return lireMontant("Nouveau montant : ");
+    }
+
+    public LocalDate demanderNouvelleDate() {
+        return lireDate("Nouvelle date (JJ/MM/AAAA, vide = aujourd'hui) : ");
+    }
+
+    public String demanderNouvelleDescription() {
+        String saisie = lireLigne("Nouvelle description (facultative) : ");
+        return saisie.isEmpty() ? null : saisie;
+    }
+
     public void afficherTransactionModifiee() {
         afficherMessage("Transaction modifiée.");
+    }
+
+    public int demanderIdentifiantASupprimer() {
+        return lireEntier("Identifiant de la transaction à supprimer (0 pour annuler) : ");
+    }
+
+    public boolean demanderConfirmationSuppression() {
+        return confirmer("Confirmer la suppression de cette transaction ?");
     }
 
     public void afficherTransactionSupprimee() {

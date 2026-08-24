@@ -14,10 +14,17 @@ import domain.enumeration.Categorie;
 */
 public class VueCategorie extends VueConsole {
 
-    public void afficherMenuCategories() {
+    private void afficherMenuCategories() {
         afficherMessage("1. Activer une catégorie");
         afficherMessage("2. Désactiver une catégorie");
         afficherMessage("3. Retour");
+    }
+
+    // Affiche le sous-menu et lit le choix en un seul appel : Main n'a plus besoin d'une méthode
+    // intermédiaire pour ça, il fait directement son switch sur la valeur renvoyée ici.
+    public int demanderChoixMenu() {
+        afficherMenuCategories();
+        return lireEntier("Votre choix : ");
     }
 
     public void afficherCategoriesActives(Set<Categorie> actives) {

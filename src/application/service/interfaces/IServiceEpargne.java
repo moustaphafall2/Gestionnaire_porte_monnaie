@@ -14,7 +14,6 @@ public interface IServiceEpargne {
     public boolean depasseraCible(Epargne objectif, double montant);
     public boolean estAtteint(Epargne objectif);
     public List<Epargne> getObjectifs();
-    public boolean aAuMoinsUnObjectif();
     public Epargne getObjectif(int idObjectif);
     public Epargne creerObjectif(String nom, double montantCible, LocalDate dateLimite);
     public void contribuerObjectif(int idObjectif, double montant, LocalDate date);
