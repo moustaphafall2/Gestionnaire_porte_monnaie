@@ -36,25 +36,21 @@ public class VueEpargne extends VueConsole {
         afficherMessage("Aucun objectif d'épargne pour le moment.");
     }
 
-    // Une ligne de progression pour un objectif : le contrôleur fournit le montant actuel et le
-    // pourcentage atteint (calculés par ServiceEpargne), la vue ne fait que les mettre en forme.
-    public void afficherObjectif(Epargne objectif, double montantActuel, double pourcentageAtteint) {
-        afficherMessage(String.format("%d - %s : %.2f / %.2f FCFA (%.2f%%)", objectif.getId(), objectif.getNom(),
-                montantActuel, objectif.getMontantCible(), pourcentageAtteint));
-    }
-
     // Traitement rapatrié depuis ControleurEpargne.afficherListeObjectifs() : tester si la liste
     // est vide et boucler pour afficher chaque ligne sont des décisions de présentation (quel
     // message montrer, comment parcourir pour mettre en forme), pas des règles métier. Les trois
     // listes reçues sont déjà calculées par ServiceEpargne et vont ensemble, index par index :
-    // c'est la vue qui les assemble ligne par ligne via afficherObjectif().
+    // c'est la vue qui les assemble ligne par ligne, une ligne de progression par objectif.
     public void afficherObjectifs(List<Epargne> objectifs, List<Double> montantsActuels, List<Double> pourcentagesAtteints) {
         if (objectifs.isEmpty()) {
             afficherAucunObjectif();
             return;
         }
         for (int i = 0; i < objectifs.size(); i++) {
-            afficherObjectif(objectifs.get(i), montantsActuels.get(i), pourcentagesAtteints.get(i));
+            Epargne objectif = objectifs.get(i);
+            afficherMessage(String.format("%d - %s : %.2f / %.2f FCFA (%.2f%%)",
+                    objectif.getId(), objectif.getNom(),
+                    montantsActuels.get(i), objectif.getMontantCible(), pourcentagesAtteints.get(i)));
         }
     }
 
