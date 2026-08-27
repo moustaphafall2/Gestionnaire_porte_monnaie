@@ -4,22 +4,28 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
+import application.dto.StatistiqueDTO;
 import domain.entity.Transaction;
 import domain.enumeration.Categorie;
 import domain.enumeration.TypeTransaction;
 import application.service.interfaces.IServiceStatistique;
 /*
     * ServiceStatistique calcule les statistiques du portefeuille sur une période donnée : le
-    * total dépensé par catégorie, et le total des revenus et des dépenses. Déplacé depuis
+    * total dépensé par catégorie, le total des revenus, le total des dépenses. Déplacé depuis
     * Portefeuille, sans changement de logique.
     *
-    * Les mouvements d'épargne (contributions, retraits) ne rentrent jamais dans ces calculs :
+    * Les mouvements d'épargne (contributions, retraits) ne rentrent jamais dans ce calcul :
     * la règle de gestion veut qu'ils restent stockés dans chaque Epargne, jamais dans les
-    * transactions du portefeuille. Comme les deux méthodes ci-dessous ne parcourent que
-    * getTransactions(), elles ne les voient tout simplement pas.
+    * transactions du portefeuille. Comme getStatistiques() ne parcourt que getTransactions(),
+    * elle ne les voit tout simplement pas.
     *
     * Comme les autres services, il ne détient jamais Portefeuille directement : il passe par
     * servicePortefeuille.getDonnees() pour lire les transactions.
+    *
+    * Depuis l'étape DTO, les trois anciennes méthodes (getTotalParCategorie, getTotalRevenus,
+    * getTotalDepenses) sont fusionnées en une seule, getStatistiques(), qui construit un
+    * StatistiqueDTO en un seul passage sur les transactions au lieu de trois passages
+    * indépendants sur la même liste.
 */
 public class ServiceStatistique implements IServiceStatistique {
     private final ServicePortefeuille servicePortefeuille;
@@ -36,33 +42,16 @@ public class ServiceStatistique implements IServiceStatistique {
         }
     }
 
-    // Total dépensé par catégorie, sur une période donnée
-    public Map<Categorie, Double> getTotalParCategorie(LocalDate debut, LocalDate fin) {
+    // Statistiques complètes sur une période donnée. Un seul passage sur les transactions
+    // calcule le total par catégorie, le total des revenus et le total des dépenses à la fois :
+    // TypeTransaction n'a que deux valeurs (DEPENSE, REVENU), donc tout ce qui n'est pas un
+    // revenu est forcément une dépense, et compte à la fois dans le total par catégorie et dans
+    // le total des dépenses.
+    public StatistiqueDTO getStatistiques(LocalDate debut, LocalDate fin) {
         validerPeriode(debut, fin);
-        Map<Categorie, Double> totaux = new HashMap<>();
-
-        for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
-            LocalDate date = transaction.getDate();
-            if (date.isBefore(debut) || date.isAfter(fin)) {
-                continue;
-            }
-            if (transaction.getType() == TypeTransaction.DEPENSE) {
-                Categorie categorie = transaction.getCategorie();
-                double totalActuel = totaux.getOrDefault(categorie, 0.0);
-                totaux.put(categorie, totalActuel + transaction.getMontant());
-            }
-        }
-
-        return totaux;
-    }
-
-    // Total des revenus sur une période donnée. Séparée de getTotalDepenses() plutôt que de
-    // renvoyer les deux dans un tableau : le contrôleur recevrait alors deux valeurs indexées
-    // (totaux[0], totaux[1]) qu'il devrait lui-même extraire, ce qui est une manipulation de
-    // donnée qui n'a rien à faire dans un contrôleur.
-    public double getTotalRevenus(LocalDate debut, LocalDate fin) {
-        validerPeriode(debut, fin);
+        Map<Categorie, Double> totalParCategorie = new HashMap<>();
         double totalRevenus = 0;
+        double totalDepenses = 0;
 
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             LocalDate date = transaction.getDate();
@@ -71,27 +60,14 @@ public class ServiceStatistique implements IServiceStatistique {
             }
             if (transaction.getType() == TypeTransaction.REVENU) {
                 totalRevenus += transaction.getMontant();
-            }
-        }
-
-        return totalRevenus;
-    }
-
-    // Symétrique de getTotalRevenus(), pour les dépenses.
-    public double getTotalDepenses(LocalDate debut, LocalDate fin) {
-        validerPeriode(debut, fin);
-        double totalDepenses = 0;
-
-        for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
-            LocalDate date = transaction.getDate();
-            if (date.isBefore(debut) || date.isAfter(fin)) {
-                continue;
-            }
-            if (transaction.getType() == TypeTransaction.DEPENSE) {
+            } else {
+                Categorie categorie = transaction.getCategorie();
+                double totalActuel = totalParCategorie.getOrDefault(categorie, 0.0);
+                totalParCategorie.put(categorie, totalActuel + transaction.getMontant());
                 totalDepenses += transaction.getMontant();
             }
         }
 
-        return totalDepenses;
+        return new StatistiqueDTO(totalParCategorie, totalRevenus, totalDepenses);
     }
 }

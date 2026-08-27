@@ -2552,3 +2552,97 @@ ne sera nécessaire — seule `VueEpargne` aurait à changer, ce qui reste cohé
 
 Sur demande : étape 5 (réduction des dépendances autour de `ServicePortefeuille`), étape 6
 (nettoyage final).
+
+## 2026-08-27 — Étape 4, fin : catégories, statistiques, solde — `StatistiqueDTO` seul nouveau DTO
+
+### Ce qui a été écrit
+
+- **Catégories** : aucun changement. `IServiceCategorie`, `ServiceCategorie`,
+  `ControleurCategorie`, `VueCategorie` ne manipulent que `Categorie` (énumération) et des types
+  simples (`Set`, `List`, `boolean`) — jamais d'entité, donc rien à envelopper.
+- **Solde** : aucun changement, pour une raison différente de celle des catégories : un DTO y
+  aurait été possible techniquement, mais pas justifié (voir "Choix de conception").
+- **`StatistiqueDTO`** (nouvelle classe, `application.dto`) : totalParCategorie
+  (`Map<Categorie, Double>`), totalRevenus, totalDepenses. Le getter de la map renvoie une vue
+  non modifiable, même règle que les getters de liste des entités.
+- **`IServiceStatistique`** : `getTotalParCategorie()`, `getTotalRevenus()`, `getTotalDepenses()`
+  disparaissent, remplacées par une seule méthode, `getStatistiques(debut, fin)`, qui renvoie
+  `StatistiqueDTO`.
+- **`ServiceStatistique`** : les trois anciennes boucles indépendantes sur
+  `getTransactions()` (une par ancienne méthode) sont fusionnées en une seule, dans
+  `getStatistiques()`. `validerPeriode()` n'est plus appelée qu'une fois au lieu de trois.
+- **`ControleurStatistique`** : un seul appel de service au lieu de trois ; les imports de `Map`
+  et `Categorie`, devenus inutiles, sont retirés. `VueStatistique` n'a besoin d'aucune
+  modification : ses deux méthodes d'affichage reçoivent toujours un `Map<Categorie, Double>` et
+  deux `double`, juste extraits du DTO par le contrôleur plutôt que reçus de trois appels
+  séparés.
+
+### Choix de conception
+
+**Pourquoi un DTO pour les statistiques, mais pas pour le solde, alors que les deux "renvoient
+plusieurs valeurs liées" au premier regard.** Argument de forme écarté volontairement : "les
+valeurs sont affichées ensemble" ne suffit pas à justifier un DTO (c'est l'argument que
+l'étudiant a lui-même mis en garde contre, priorité 7 du `CLAUDE.md`). Le critère retenu est
+différent pour chaque écran :
+- **Statistiques** : les trois anciennes méthodes n'avaient qu'un seul appelant
+  (`ControleurStatistique`, vérifié par `grep`), et chacune parcourait l'intégralité des
+  transactions séparément — un vrai triple travail redondant sur la même liste, pour la même
+  période. Fusionner en une seule méthode/DTO élimine ce travail en double, sans rien casser
+  ailleurs.
+- **Solde** : `ServicePortefeuille.getSoldeDisponible()` a d'autres appelants qui n'ont besoin
+  que du solde, jamais du total épargné (`ServiceEpargne.contribuerObjectif()`,
+  `ControleurEpargne.contribuerObjectif()` via `vueEpargne.afficherSoldeDisponible()`). Un DTO
+  regroupant les deux valeurs les forcerait à calculer un total épargné dont ils n'ont rien à
+  faire, ou casserait leur usage actuel. Et le doublon de calcul qui existe réellement ici
+  (`getSoldeDisponible()` appelle déjà `getTotalEpargne()` en interne, puis
+  `ControleurPortefeuille` le rappelle une seconde fois) ne serait pas résolu par un DTO construit
+  à partir des deux méthodes existantes — il faudrait restructurer l'intérieur de
+  `ServicePortefeuille` pour un gain négligeable à l'échelle d'un portefeuille personnel. **Un DTO
+  n'est donc pas justifié quand la valeur qu'il envelopperait est réutilisée telle quelle ailleurs
+  dans le métier** : c'est l'arbitrage retenu, à appliquer aux futures étapes si le cas se
+  représente.
+
+**Pourquoi fusionner `getTotalRevenus()`/`getTotalDepenses()` revient sur une décision déjà
+prise, et pourquoi c'est justifié quand même.** L'entrée du 2026-08-21 ("Contrôleurs sans
+traitement, dernière passe : critère à quatre catégories") avait explicitement remplacé un
+`double[] getTotalRevenusEtDepenses()` par deux méthodes séparées, pour que le contrôleur n'ait
+pas à indexer un tableau (`totaux[0]`/`totaux[1]`) — une manipulation de donnée qui n'a rien à
+faire dans un contrôleur. Cette raison ne s'applique plus ici : un `StatistiqueDTO` s'utilise par
+des getters nommés (`statistiques.getTotalRevenus()`), pas par position — le contrôleur ne
+manipule toujours rien, il lit un champ nommé, exactement comme il le faisait déjà avec deux
+méthodes séparées. La fusion redevient possible non pas parce que l'ancienne règle était fausse,
+mais parce que le DTO change la nature de l'objet manipulé : un tableau expose sa structure
+interne (des cases numérotées), un DTO expose une intention (`getTotalRevenus`).
+
+### Points à savoir défendre
+
+- **`StatistiqueDTO` recalcule-t-il quelque chose lui-même ?** Non : les trois valeurs qu'il
+  porte sont déjà calculées par `ServiceStatistique.getStatistiques()` au moment de sa
+  construction ; le DTO ne fait que les transporter.
+- **Pourquoi le total par catégorie et le total des dépenses sont-ils mis à jour dans la même
+  branche `else` du `if` sur le type de transaction ?** Parce que `TypeTransaction` n'a que deux
+  valeurs (`DEPENSE`, `REVENU`) : tout ce qui n'est pas un revenu est nécessairement une dépense,
+  donc les deux mises à jour (la carte par catégorie, et le total des dépenses) ont exactement la
+  même condition — les séparer en deux `if` identiques aurait été une répétition inutile.
+- **`VueStatistique` a-t-elle dû changer pour recevoir le DTO ?** Non, et c'est révélateur : ses
+  deux méthodes d'affichage existantes recevaient déjà exactement les bonnes formes de données
+  (`Map<Categorie, Double>`, deux `double`) — seul le contrôleur change, en extrayant ces mêmes
+  valeurs d'un seul DTO au lieu de trois appels de service. La preuve que la vue n'a jamais
+  dépendu de la façon dont le service organisait ses données en interne.
+
+### Pièges rencontrés
+
+Aucun — compilation propre du premier coup sur l'ensemble de `src/`.
+
+### Vérification globale de l'étape 4
+
+`grep -rn "^import domain\.entity" src/presentation/` ne renvoie plus rien : aucune entité du
+domaine ne circule jusqu'à la présentation, sur les cinq écrans. Ce qui reste importé depuis
+`domain.enumeration` en présentation — autorisé explicitement par le `CLAUDE.md` — : `Categorie`
+(catégories, transactions, statistiques), `TypeTransaction` (transactions), `SensMouvement`
+(épargne).
+
+### Reste à faire
+
+Étape 4 terminée. Sur demande : étape 5 (réduction des dépendances autour de
+`ServicePortefeuille`), étape 6 (nettoyage final).

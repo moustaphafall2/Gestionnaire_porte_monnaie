@@ -1,9 +1,8 @@
 package presentation.controller;
 
 import java.time.LocalDate;
-import java.util.Map;
 
-import domain.enumeration.Categorie;
+import application.dto.StatistiqueDTO;
 import application.service.interfaces.IServiceStatistique;
 import presentation.view.VueStatistique;
 
@@ -32,12 +31,9 @@ public class ControleurStatistique {
         // IllegalArgumentException, comme toute donnée invalide en soi (peu importe l'état du
         // portefeuille). Attrapée ici, comme les autres erreurs métier.
         try {
-            Map<Categorie, Double> totauxParCategorie = serviceStatistique.getTotalParCategorie(debut, fin);
-            vueStatistique.afficherTotauxParCategorie(totauxParCategorie);
-
-            double totalRevenus = serviceStatistique.getTotalRevenus(debut, fin);
-            double totalDepenses = serviceStatistique.getTotalDepenses(debut, fin);
-            vueStatistique.afficherTotalRevenusEtDepenses(totalRevenus, totalDepenses);
+            StatistiqueDTO statistiques = serviceStatistique.getStatistiques(debut, fin);
+            vueStatistique.afficherTotauxParCategorie(statistiques.getTotalParCategorie());
+            vueStatistique.afficherTotalRevenusEtDepenses(statistiques.getTotalRevenus(), statistiques.getTotalDepenses());
         } catch (IllegalArgumentException erreur) {
             vueStatistique.afficherErreur(erreur.getMessage());
         }
