@@ -2416,3 +2416,139 @@ ce qu'elle décrit — le raisonnement sur la conversion, le `void`, la suppress
 comme décrit dans l'entrée précédente (le contenu ne change pas, seul le nom des classes à
 créer). Le code de cette sous-étape n'est pas encore écrit : l'étudiant teste et commite d'abord
 l'écran transactions.
+
+## 2026-08-27 — Étape 4 (2/2) : `ObjectifDTO` et `MouvementDTO`, plus aucune entité en présentation
+
+### Ce qui a été écrit
+
+- **`ObjectifDTO`** (nouvelle classe, `application.dto`) : id, nom, montantCible, montantActuel,
+  pourcentageAtteint. Fusionne en un seul objet ce que trois paramètres séparés transportaient
+  auparavant (`List<Epargne>` + deux `List<Double>` parallèles).
+- **`MouvementDTO`** (nouvelle classe, `application.dto`) : montant, sens, date — exactement ce
+  qu'une ligne de mouvement affiche.
+- **`IServiceEpargne`** : `getObjectifs()` renvoie `List<ObjectifDTO>` (une seule liste, plus de
+  parallèle) ; `getObjectif(int)` renvoie `ObjectifDTO` ; nouvelle méthode `getMouvements(int)`
+  renvoyant `List<MouvementDTO>`, qui remplace l'accès direct `objectif.getMouvements()` que
+  `ControleurEpargne` faisait sur l'entité. `depasseraCible` prend désormais un `idObjectif`
+  plutôt qu'un `Epargne`. `creerObjectif` passe de `Epargne` à `void`, même raisonnement que
+  `ajouterDepense`/`ajouterRevenu` à la sous-étape précédente : la valeur créée n'était jamais
+  lue par le contrôleur. `getMontantActuel`, `getPourcentageAtteint`, `getMontantsActuels`,
+  `getPourcentagesAtteints` sortent entièrement de l'interface.
+- **`ServiceEpargne`** : `getMontantActuel(Epargne)`/`getPourcentageAtteint(Epargne)` passent en
+  `private` (encore utilisées en interne par `depasseraCible`, `retirerObjectif`,
+  `supprimerObjectif`) ; `getMontantsActuels(List<Epargne>)`/`getPourcentagesAtteints(List<Epargne>)`
+  sont supprimées, pas seulement rendues privées : plus aucun code, pas même interne, ne les
+  appelait une fois `getObjectifs()` réécrite pour construire directement la liste d'`ObjectifDTO`.
+  Deux méthodes privées `versAffichage()` (surchargées, une par type d'entité) construisent les
+  DTO juste avant que chaque méthode publique ne les renvoie.
+- **`VueEpargne`** : `afficherObjectifs()` reçoit une seule `List<ObjectifDTO>` au lieu du trio.
+  `afficherMouvements()` reçoit `List<MouvementDTO>` et ne délègue plus à
+  `mouvement.toString()` (implicite, via `"  " + mouvement`) : une nouvelle méthode privée
+  `formaterMouvement(MouvementDTO)` reprend exactement la même mise en forme (signe, libellé
+  contribution/retrait), mais dans la vue.
+- **`MouvementEpargne`** : `toString()` supprimée, même raisonnement et même vérification
+  préalable (`grep` sur `src/`) que pour `Transaction.toString()`.
+- **`ControleurEpargne`** : les trois variables locales `Epargne objectif` deviennent
+  `ObjectifDTO objectif`. `afficherListeObjectifs()` perd sa liste intermédiaire et son double
+  appel à `getMontantsActuels`/`getPourcentagesAtteints`, remplacés par un seul appel à
+  `serviceEpargne.getObjectifs()`. `afficherObjectifs()` (l'action détail) appelle
+  `serviceEpargne.getMouvements(id)` au lieu de `objectif.getMouvements()`. Import de
+  `domain.entity.Epargne` retiré : plus aucune méthode de cette classe ne déclare de type du
+  domaine.
+
+### Choix de conception
+
+**Pourquoi `getMontantsActuels`/`getPourcentagesAtteints` sont supprimées plutôt que rendues
+privées, contrairement à `getMontantActuel`/`getPourcentageAtteint`.** Vérifié par lecture
+complète de `ServiceEpargne` avant de trancher : les versions "liste entière" n'avaient qu'un
+seul appelant, `ControleurEpargne.afficherListeObjectifs()`, qui vient de disparaître avec la
+fusion dans `getObjectifs()`. Les garder, même en `private`, aurait laissé deux méthodes mortes
+dans la classe — contraire à la règle du projet de ne jamais garder de code que personne
+n'appelle.
+
+**Pourquoi `getObjectif(int)` ne renvoie-t-il pas aussi les mouvements, pour éviter un second
+appel de service dans `ControleurEpargne.afficherObjectifs()` ?** Question posée avant d'écrire
+le DTO : `ObjectifDTO` sert à la fois à la ligne de la liste (id, nom, montantCible,
+montantActuel, pourcentageAtteint) et au nom affiché avant les mouvements du détail — mais
+aucun de ces deux usages n'a besoin des mouvements eux-mêmes, sauf l'écran détail. Ajouter un
+champ `mouvements` à `ObjectifDTO` uniquement pour ce second cas aurait chargé toutes les autres
+utilisations (la liste, en particulier) d'une donnée qu'elles n'affichent jamais — contraire à
+la règle "un DTO ne contient que ce que l'écran affiche réellement". Une méthode séparée,
+`getMouvements(int idObjectif)`, ne coûte qu'un appel de service de plus, déjà le patron suivi
+partout ailleurs dans ce contrôleur.
+
+**Pourquoi les deux `versAffichage()` (une pour `Epargne`, une pour `MouvementEpargne`) portent
+le même nom plutôt que des noms distincts.** Surcharge de méthode : Java choisit la bonne
+version selon le type de l'argument, un mécanisme de base du langage, pas une astuce. Même
+patron que `ServiceTransaction.versAffichage(Transaction)` de la sous-étape précédente ; deux
+noms différents (`objectifVersAffichage`/`mouvementVersAffichage`) n'auraient rien clarifié de
+plus, seulement allongé les noms.
+
+**`estAtteint(Epargne objectif)` n'a pas été touchée.** Toujours du code mort (aucun appelant,
+ni contrôleur ni vue — vérifié à nouveau par `grep`), toujours hors du périmètre de cette étape.
+`IServiceEpargne` garde donc un import `domain.entity.Epargne`, uniquement pour cette méthode :
+ce n'est pas une violation de la règle "aucune entité en présentation" (la règle porte sur
+`presentation`, pas sur `application.service`, qui manipule forcément des entités en interne),
+mais c'est signalé une seconde fois ici en attendant une décision explicite.
+
+### Points à savoir défendre
+
+- **Les trois écrans transactions et épargne respectent-ils maintenant la priorité 6 du
+  `CLAUDE.md` ("préparer progressivement l'usage des DTO, pour éviter de faire circuler les
+  entités partout") ?** Oui, vérifié concrètement : `grep -rn "^import domain\.entity"
+  src/presentation/` ne renvoie plus rien. Avant cette étape, `VueTransaction` importait
+  `Transaction`, `VueEpargne` importait `Epargne` et `MouvementEpargne`, `ControleurEpargne`
+  importait `Epargne` — les quatre imports ont disparu au fil des deux sous-étapes.
+- **`ObjectifDTO`/`MouvementDTO` recalculent-ils quelque chose eux-mêmes ?** Non : `montantActuel`
+  et `pourcentageAtteint` arrivent déjà calculés par `ServiceEpargne` au moment de la
+  construction du DTO ; ni `VueEpargne` ni le DTO ne refont le calcul, ils le lisent seulement.
+- **Pourquoi `depasseraCible` retrouve-t-il l'objectif via `trouverObjectif(idObjectif)` plutôt
+  que d'exiger l'`ObjectifDTO` déjà en main dans `ControleurEpargne` ?** Un DTO ne porte aucune
+  méthode de calcul (règle du `CLAUDE.md` : "pas de calcul dedans"), donc il ne peut pas servir
+  de base à `depasseraCible`, qui doit relire le montant cible et recalculer le montant actuel
+  au moment de l'appel. Prendre un `idObjectif` et laisser le service retrouver l'entité est
+  la seule option qui respecte à la fois "le DTO ne calcule rien" et "le contrôleur ne fait
+  aucun calcul".
+
+### Pièges rencontrés
+
+Aucun — compilation propre du premier coup sur l'ensemble de `src/` (`javac -Xlint:all`), les
+seuls avertissements restants (`serialVersionUID` sur les deux exceptions, une classe interne de
+Gson) préexistaient déjà avant cette étape et ne concernent pas le code modifié ici.
+
+### Reste à faire
+
+Étape 4 terminée pour les deux écrans qui faisaient circuler des entités (transactions, épargne).
+Catégories, statistiques et solde n'en avaient pas besoin : ils ne manipulaient déjà que des
+énumérations et des types simples. Reste, sur demande : étape 5 (réduction des dépendances
+autour de `ServicePortefeuille`), étape 6 (nettoyage final).
+
+## 2026-08-27 — Correction : suppression d'`estAtteint()`, du code mort
+
+### Ce qui a été écrit
+
+`estAtteint(Epargne)` supprimée d'`IServiceEpargne` et de `ServiceEpargne`. Avec elle,
+`domain.entity.Epargne` disparaît des imports d'`IServiceEpargne` : l'interface ne mentionne
+plus aucune entité, uniquement des DTO et des types simples.
+
+### Choix de conception
+
+**Pourquoi supprimer plutôt que garder "au cas où".** Signalée deux fois comme code mort sans
+appelant (ni contrôleur ni vue) lors des deux entrées précédentes. Une méthode publique sans
+appelant n'est pas une fonctionnalité en réserve, c'est du code que personne ne peut expliquer
+un mois plus tard sans deviner à quoi il devait servir — contraire à la règle du projet de ne
+jamais garder de code qui ne se défend pas.
+
+**Idée notée pour plus tard, pas implémentée : signaler visuellement qu'un objectif est
+atteint.** À l'affichage de la liste (`VueEpargne.afficherObjectifs`), une ligne dont le
+pourcentage atteint dépasse 100 % pourrait porter une marque distincte (un astérisque, un texte
+"(atteint)"...). Ce n'est pas demandé aujourd'hui et n'a pas été codé : la donnée nécessaire
+existe déjà telle quelle dans `ObjectifDTO.getPourcentageAtteint()` (>= 100 signifie atteint),
+donc le jour où cette évolution est demandée, aucun nouveau champ ni nouvelle méthode de service
+ne sera nécessaire — seule `VueEpargne` aurait à changer, ce qui reste cohérent avec la règle
+"le formatage à l'affichage est du ressort de la vue".
+
+### Reste à faire
+
+Sur demande : étape 5 (réduction des dépendances autour de `ServicePortefeuille`), étape 6
+(nettoyage final).

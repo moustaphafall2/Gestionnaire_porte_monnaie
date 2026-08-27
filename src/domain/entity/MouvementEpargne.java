@@ -1,7 +1,6 @@
 package domain.entity;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 
 import domain.enumeration.SensMouvement;
 /*
@@ -16,7 +15,6 @@ import domain.enumeration.SensMouvement;
 */
 
 public class MouvementEpargne {
-    private static final DateTimeFormatter FORMAT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private double montant;
     private SensMouvement sens;
@@ -38,12 +36,5 @@ public class MouvementEpargne {
     }
     public LocalDate getDate() {
         return date;
-    }
-
-    @Override
-    public String toString() {
-        String signe = (getSens() == SensMouvement.CONTRIBUTION) ? "+" : "-";
-        String libelle = (getSens() == SensMouvement.CONTRIBUTION) ? "contribution" : "retrait";
-        return "[" + getDate().format(FORMAT_DATE) + "] " + signe + getMontant() + " FCFA (" + libelle + ")";
     }
 }

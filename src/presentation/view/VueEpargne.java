@@ -4,8 +4,9 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 
-import domain.entity.Epargne;
-import domain.entity.MouvementEpargne;
+import application.dto.MouvementDTO;
+import application.dto.ObjectifDTO;
+import domain.enumeration.SensMouvement;
 
 /*
     * VueEpargne affiche l'écran "Gérer mes objectifs d'épargne" : créer un objectif, contribuer,
@@ -38,33 +39,42 @@ public class VueEpargne extends VueConsole {
 
     // Traitement rapatrié depuis ControleurEpargne.afficherListeObjectifs() : tester si la liste
     // est vide et boucler pour afficher chaque ligne sont des décisions de présentation (quel
-    // message montrer, comment parcourir pour mettre en forme), pas des règles métier. Les trois
-    // listes reçues sont déjà calculées par ServiceEpargne et vont ensemble, index par index :
-    // c'est la vue qui les assemble ligne par ligne, une ligne de progression par objectif.
-    public void afficherObjectifs(List<Epargne> objectifs, List<Double> montantsActuels, List<Double> pourcentagesAtteints) {
+    // message montrer, comment parcourir pour mettre en forme), pas des règles métier. Depuis
+    // l'étape DTO, ServiceEpargne fournit une seule liste d'ObjectifDTO, chacun portant déjà son
+    // montant actuel et son pourcentage atteint : plus de listes parallèles à faire avancer
+    // ensemble.
+    public void afficherObjectifs(List<ObjectifDTO> objectifs) {
         if (objectifs.isEmpty()) {
             afficherAucunObjectif();
             return;
         }
-        for (int i = 0; i < objectifs.size(); i++) {
-            Epargne objectif = objectifs.get(i);
+        for (ObjectifDTO objectif : objectifs) {
             afficherMessage(String.format("%d - %s : %.2f / %.2f FCFA (%.2f%%)",
                     objectif.getId(), objectif.getNom(),
-                    montantsActuels.get(i), objectif.getMontantCible(), pourcentagesAtteints.get(i)));
+                    objectif.getMontantActuel(), objectif.getMontantCible(), objectif.getPourcentageAtteint()));
         }
     }
 
     // Détail des contributions/retraits d'un objectif. Ces mouvements ne sont jamais mélangés à
     // l'historique des transactions : ce n'est ni une dépense ni un revenu.
-    public void afficherMouvements(String nomObjectif, List<MouvementEpargne> mouvements) {
+    public void afficherMouvements(String nomObjectif, List<MouvementDTO> mouvements) {
         if (mouvements.isEmpty()) {
             afficherMessage("Aucun mouvement pour le moment sur \"" + nomObjectif + "\".");
             return;
         }
         afficherMessage("Mouvements de \"" + nomObjectif + "\" :");
-        for (MouvementEpargne mouvement : mouvements) {
-            afficherMessage("  " + mouvement);
+        for (MouvementDTO mouvement : mouvements) {
+            afficherMessage("  " + formaterMouvement(mouvement));
         }
+    }
+
+    // Reprend la mise en forme qui vivait auparavant dans MouvementEpargne.toString() : depuis
+    // l'introduction des DTO, ni l'entité ni MouvementDTO ne portent de mise en forme, c'est
+    // entièrement le rôle de la vue.
+    private String formaterMouvement(MouvementDTO mouvement) {
+        String signe = (mouvement.getSens() == SensMouvement.CONTRIBUTION) ? "+" : "-";
+        String libelle = (mouvement.getSens() == SensMouvement.CONTRIBUTION) ? "contribution" : "retrait";
+        return "[" + mouvement.getDate().format(FORMAT_DATE) + "] " + signe + mouvement.getMontant() + " FCFA (" + libelle + ")";
     }
 
     // Le nom se lit en texte libre : aucune contrainte de format, seule Epargne validera qu'il

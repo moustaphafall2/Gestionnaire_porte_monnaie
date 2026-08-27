@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+import application.dto.MouvementDTO;
+import application.dto.ObjectifDTO;
 import domain.entity.Epargne;
 import domain.entity.MouvementEpargne;
 import domain.entity.Portefeuille;
@@ -27,6 +29,10 @@ import application.service.interfaces.IServiceEpargne;
     * Comme les autres services, il ne détient jamais Portefeuille directement : il passe par
     * servicePortefeuille.getDonnees() pour lire ou modifier les objectifs, et par
     * sauvegarder() pour écrire le résultat.
+    *
+    * Depuis l'étape DTO, il ne renvoie plus jamais d'Epargne ni de MouvementEpargne à la
+    * présentation : chaque méthode consultée par ControleurEpargne renvoie un ObjectifDTO ou un
+    * MouvementDTO, construit par versAffichage() juste avant de sortir du service.
 */
 public class ServiceEpargne implements IServiceEpargne {
     // Les montants sont des FCFA sans centimes, mais restent des double : deux montants
@@ -42,39 +48,23 @@ public class ServiceEpargne implements IServiceEpargne {
 
     // Montant actuellement épargné sur cet objectif. Le calcul passe par CalculEpargne, partagé
     // avec ServicePortefeuille (getTotalEpargne), pour qu'il n'existe qu'à un seul endroit.
-    public double getMontantActuel(Epargne objectif) {
+    // Privée : depuis l'étape DTO, plus aucun appelant hors de ce service n'a besoin du montant
+    // actuel isolé, il arrive toujours déjà inclus dans un ObjectifDTO.
+    private double getMontantActuel(Epargne objectif) {
         return CalculEpargne.calculerMontantActuel(objectif);
     }
 
-    public double getPourcentageAtteint(Epargne objectif) {
+    private double getPourcentageAtteint(Epargne objectif) {
         return (getMontantActuel(objectif) / objectif.getMontantCible()) * 100;
-    }
-
-    // Calcule le montant actuel de toute une liste d'objectifs d'un coup. Le contrôleur affichait
-    // auparavant chaque ligne dans une boucle qui appelait getMontantActuel() objectif par
-    // objectif : itérer pour calculer est un traitement, ce n'est pas le rôle d'un contrôleur.
-    // La boucle est ici, dans le service, à côté du calcul qu'elle répète.
-    public List<Double> getMontantsActuels(List<Epargne> objectifs) {
-        List<Double> montants = new ArrayList<>();
-        for (Epargne objectif : objectifs) {
-            montants.add(getMontantActuel(objectif));
-        }
-        return montants;
-    }
-
-    // Même principe que getMontantsActuels(), pour le pourcentage atteint.
-    public List<Double> getPourcentagesAtteints(List<Epargne> objectifs) {
-        List<Double> pourcentages = new ArrayList<>();
-        for (Epargne objectif : objectifs) {
-            pourcentages.add(getPourcentageAtteint(objectif));
-        }
-        return pourcentages;
     }
 
     // Indique si une contribution de ce montant ferait dépasser le montant cible. Dépasser la
     // cible reste autorisé (règle de gestion) : c'est à l'appelant (ControleurEpargne) de
-    // décider s'il signale ce dépassement avant de confirmer l'opération.
-    public boolean depasseraCible(Epargne objectif, double montant) {
+    // décider s'il signale ce dépassement avant de confirmer l'opération. Prend un idObjectif et
+    // non un Epargne : ControleurEpargne ne détient plus d'entité, seulement l'id saisi par
+    // l'utilisateur et l'ObjectifDTO reçu de getObjectif().
+    public boolean depasseraCible(int idObjectif, double montant) {
+        Epargne objectif = trouverObjectif(idObjectif);
         return getMontantActuel(objectif) + montant > objectif.getMontantCible();
     }
 
@@ -83,22 +73,35 @@ public class ServiceEpargne implements IServiceEpargne {
         return Math.abs(getMontantActuel(objectif)) < EPSILON;
     }
 
-    public boolean estAtteint(Epargne objectif) {
-        return getMontantActuel(objectif) >= objectif.getMontantCible();
+    // Liste complète des objectifs, prête à afficher : chaque ObjectifDTO porte déjà son montant
+    // actuel et son pourcentage atteint, calculés ici une fois pour toute la liste. Avant l'étape
+    // DTO, ControleurEpargne recevait la liste d'Epargne et deux listes parallèles de Double ;
+    // les trois sont fusionnées dans le DTO, un par objectif.
+    public List<ObjectifDTO> getObjectifs() {
+        List<ObjectifDTO> resultat = new ArrayList<>();
+        for (Epargne objectif : servicePortefeuille.getDonnees().getObjectifs()) {
+            resultat.add(versAffichage(objectif));
+        }
+        return resultat;
     }
 
-    // Liste complète des objectifs, utilisée par ControleurEpargne pour les afficher (avec leur
-    // progression, calculée à part par getMontantActuel/getPourcentageAtteint) avant de demander
-    // un identifiant à l'utilisateur.
-    public List<Epargne> getObjectifs() {
-        return servicePortefeuille.getDonnees().getObjectifs();
+    // Recherche publique d'un objectif par id, utilisée par ControleurEpargne pour récupérer le
+    // nom de l'objectif choisi avant de contribuer, retirer ou en afficher le détail. Renvoie le
+    // DTO, jamais l'entité elle-même.
+    public ObjectifDTO getObjectif(int idObjectif) {
+        return versAffichage(trouverObjectif(idObjectif));
     }
 
-    // Recherche publique d'un objectif par id, utilisée par ControleurEpargne pour récupérer
-    // l'objectif choisi (nom, mouvements...) avant de contribuer, retirer ou en afficher le
-    // détail.
-    public Epargne getObjectif(int idObjectif) {
-        return trouverObjectif(idObjectif);
+    // Mouvements (contributions et retraits) d'un objectif, pour l'écran détail. Anciennement
+    // objectif.getMouvements() appelé directement par ControleurEpargne sur l'entité reçue de
+    // getObjectif() ; depuis l'étape DTO, ControleurEpargne ne détient plus d'Epargne, donc plus
+    // aucun moyen d'atteindre ses mouvements sans passer par une méthode du service.
+    public List<MouvementDTO> getMouvements(int idObjectif) {
+        List<MouvementDTO> resultat = new ArrayList<>();
+        for (MouvementEpargne mouvement : trouverObjectif(idObjectif).getMouvements()) {
+            resultat.add(versAffichage(mouvement));
+        }
+        return resultat;
     }
 
     // Anciennement Portefeuille.getObjectif()/trouverObjectif() : une recherche par identifiant
@@ -112,6 +115,19 @@ public class ServiceEpargne implements IServiceEpargne {
             }
         }
         throw new IllegalArgumentException("Aucun objectif avec l'identifiant " + idObjectif + ".");
+    }
+
+    // Construit le DTO transmis à la présentation à partir d'une Epargne du domaine : une copie
+    // de ses champs, plus montantActuel et pourcentageAtteint déjà calculés (le DTO ne doit
+    // jamais recalculer quoi que ce soit lui-même).
+    private ObjectifDTO versAffichage(Epargne objectif) {
+        return new ObjectifDTO(objectif.getId(), objectif.getNom(), objectif.getMontantCible(),
+                getMontantActuel(objectif), getPourcentageAtteint(objectif));
+    }
+
+    // Même principe que versAffichage(Epargne), pour un mouvement.
+    private MouvementDTO versAffichage(MouvementEpargne mouvement) {
+        return new MouvementDTO(mouvement.getMontant(), mouvement.getSens(), mouvement.getDate());
     }
 
     // Anciennement Epargne.validerNom().
@@ -141,8 +157,9 @@ public class ServiceEpargne implements IServiceEpargne {
 
     // Crée un nouvel objectif et l'ajoute au portefeuille. Le compteur d'identifiants reste
     // dans Portefeuille (donc sauvegardé) : repartir de zéro au redémarrage créerait des
-    // doublons.
-    public Epargne creerObjectif(String nom, double montantCible, LocalDate dateLimite) {
+    // doublons. Renvoie void : comme ajouterDepense/ajouterRevenu, la valeur créée n'était
+    // jamais lue par ControleurEpargne, la garder aurait été du code mort.
+    public void creerObjectif(String nom, double montantCible, LocalDate dateLimite) {
         validerNomObjectif(nom);
         validerMontantCible(montantCible);
 
@@ -150,7 +167,6 @@ public class ServiceEpargne implements IServiceEpargne {
         Epargne objectif = new Epargne(genererIdObjectif(portefeuille), nom, montantCible, dateLimite);
         portefeuille.ajouterObjectif(objectif);
         servicePortefeuille.sauvegarder();
-        return objectif;
     }
 
     // Anciennement MouvementEpargne.validerMontant(). Appelée à la fois par contribuerObjectif()

@@ -1,9 +1,8 @@
 package presentation.controller;
 
 import java.time.LocalDate;
-import java.util.List;
 
-import domain.entity.Epargne;
+import application.dto.ObjectifDTO;
 import application.service.interfaces.IServiceEpargne;
 import application.service.interfaces.IServicePortefeuille;
 import presentation.view.VueEpargne;
@@ -56,7 +55,7 @@ public class ControleurEpargne {
         int id = vueEpargne.demanderIdentifiantObjectif();
 
         try {
-            Epargne objectif = serviceEpargne.getObjectif(id);
+            ObjectifDTO objectif = serviceEpargne.getObjectif(id);
 
             vueEpargne.afficherSoldeDisponible(servicePortefeuille.getSoldeDisponible());
             double montant = vueEpargne.demanderMontantContribution();
@@ -65,7 +64,7 @@ public class ControleurEpargne {
             // simple signalement avant confirmation (le refus ne porte que sur le solde
             // disponible, vérifié par ServiceEpargne.contribuerObjectif au moment de
             // l'enregistrement).
-            if (serviceEpargne.depasseraCible(objectif, montant)) {
+            if (serviceEpargne.depasseraCible(id, montant)) {
                 vueEpargne.afficherAvertissementDepassementCible();
             }
 
@@ -88,7 +87,7 @@ public class ControleurEpargne {
         int id = vueEpargne.demanderIdentifiantObjectif();
 
         try {
-            Epargne objectif = serviceEpargne.getObjectif(id);
+            ObjectifDTO objectif = serviceEpargne.getObjectif(id);
 
             double montant = vueEpargne.demanderMontantRetrait();
             LocalDate date = vueEpargne.demanderDate();
@@ -113,8 +112,8 @@ public class ControleurEpargne {
         }
 
         try {
-            Epargne objectif = serviceEpargne.getObjectif(id);
-            vueEpargne.afficherMouvements(objectif.getNom(), objectif.getMouvements());
+            ObjectifDTO objectif = serviceEpargne.getObjectif(id);
+            vueEpargne.afficherMouvements(objectif.getNom(), serviceEpargne.getMouvements(id));
         } catch (IllegalArgumentException | IllegalStateException erreur) {
             vueEpargne.afficherErreur(erreur.getMessage());
         }
@@ -136,13 +135,12 @@ public class ControleurEpargne {
         }
     }
 
-    // Récupère la liste des objectifs et la transmet entière à VueEpargne.afficherObjectifs(),
-    // avec les montants actuels et pourcentages atteints déjà calculés par ServiceEpargne pour
-    // toute la liste. Ni boucle ni test de liste vide ici : les deux sont dans la vue. Partagée
-    // par contribuerObjectif(), retirerObjectif(), afficherObjectifs() et supprimerObjectif(),
-    // qui ont toutes besoin de montrer la liste avant de demander un identifiant.
+    // Récupère la liste des objectifs, déjà prête à afficher (chaque ObjectifDTO porte son
+    // montant actuel et son pourcentage atteint), et la transmet à VueEpargne.afficherObjectifs().
+    // Ni boucle ni test de liste vide ici : les deux sont dans la vue. Partagée par
+    // contribuerObjectif(), retirerObjectif(), afficherObjectifs() et supprimerObjectif(), qui
+    // ont toutes besoin de montrer la liste avant de demander un identifiant.
     private void afficherListeObjectifs() {
-        List<Epargne> objectifs = serviceEpargne.getObjectifs();
-        vueEpargne.afficherObjectifs(objectifs, serviceEpargne.getMontantsActuels(objectifs), serviceEpargne.getPourcentagesAtteints(objectifs));
+        vueEpargne.afficherObjectifs(serviceEpargne.getObjectifs());
     }
 }
