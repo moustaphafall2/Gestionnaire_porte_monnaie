@@ -2288,3 +2288,131 @@ devienne un bug réel.
 
 Étapes 4 à 6 du CLAUDE.md, à venir sur demande : DTO, réduction des dépendances autour de
 `ServicePortefeuille`, nettoyage final.
+
+## 2026-08-27 — Étape 4 (1/2) : `TransactionAffichage`, premier DTO de l'application
+
+### Ce qui a été écrit
+
+- **`TransactionAffichage`** (nouvelle classe, `application.dto`) : six champs — id, montant,
+  type, catégorie, date, description — exactement ce qu'une ligne d'historique affiche
+  aujourd'hui. Attributs `final`, constructeur, getters, rien d'autre : ni calcul, ni mise en
+  forme.
+- **`IServiceTransaction`** : `getHistorique()`, `filtrerParDate()`, `filtrerParCategorie()`,
+  `filtrerParType()`, `getTransaction(int)` renvoient désormais `TransactionAffichage`/
+  `List<TransactionAffichage>` au lieu de `Transaction`/`List<Transaction>`.
+  `ajouterDepense()`/`ajouterRevenu()` passent de `Transaction` à `void` : leur valeur de retour
+  n'a jamais été lue par `ControleurTransaction`, la garder aurait été du code mort.
+- **`ServiceTransaction`** : une méthode privée de plus, `versAffichage(Transaction)`, qui
+  construit le DTO à partir de l'entité. Chaque méthode qui renvoyait une `Transaction` ou une
+  liste de `Transaction` à la présentation passe désormais par elle juste avant de sortir du
+  service — l'entité elle-même ne sort plus jamais de cette classe.
+- **`VueTransaction`** : `afficherTransactions()` reçoit `List<TransactionAffichage>` au lieu de
+  `List<Transaction>`. Elle ne délègue plus à `transaction.toString()` : une nouvelle méthode
+  privée `formaterLigne(TransactionAffichage)` reprend exactement la même mise en forme, mais
+  dans la vue.
+- **`Transaction`** : `toString()` supprimée. Plus aucun appelant depuis que `VueTransaction`
+  construit elle-même sa ligne d'affichage.
+- **`ControleurTransaction`** : aucune modification. Il ne déclarait déjà aucune variable de
+  type `Transaction` (le seul usage, `serviceTransaction.getTransaction(id).getType()`, est un
+  simple enchaînement d'appel qui n'a jamais eu besoin d'importer le type) — le changement de
+  signature ne s'y voit donc pas.
+
+### Choix de conception
+
+**Pourquoi la conversion vit dans `ServiceTransaction` et pas dans une classe dédiée.** Un seul
+service concerné à cette étape, une poignée de méthodes à adapter : une classe séparée
+(`ConvertisseurTransaction` ou équivalent) aurait ajouté une indirection sans réduire de
+duplication réelle. `ServiceTransaction` connaît déjà les données de la `Transaction` qu'il
+vient de manipuler ou de retrouver ; construire le DTO juste à côté est le trajet le plus court
+entre la donnée et sa sortie vers la présentation.
+
+**Pourquoi `ajouterDepense()`/`ajouterRevenu()` deviennent `void`.** Question posée avant de
+coder, tranchée par l'étudiant : une valeur de retour que personne ne lit est du code mort, et
+`activerCategorie()`, `supprimerTransaction()`, `contribuerObjectif()` renvoient déjà `void` —
+une méthode qui exécute une action renvoie `void`, une méthode qui répond à une question renvoie
+une valeur. `ajouterDepense`/`ajouterRevenu` sont clairement du premier type.
+
+**Pourquoi `Transaction.toString()` disparaît plutôt que de rester inutilisée.** Un DTO ne
+contient "ni calcul, ni mise en forme" (règle du `CLAUDE.md`) : une fois `VueTransaction`
+alimentée par `TransactionAffichage`, c'est forcément elle qui construit la ligne affichée à
+partir des champs bruts du DTO. `Transaction.toString()` n'avait donc plus aucun appelant.
+Vérifié avant suppression (`grep` sur tout `src/`) qu'aucun message d'erreur, aucune
+concaténation implicite (`+ transaction`) ni aucun affichage de secours ne s'appuyait dessus :
+seuls l'appel explicite de `VueTransaction` (remplacé) et rien d'autre. Même précédent déjà posé
+pour `Epargne.toString()` à l'étape 3 bis.
+
+**Pourquoi `getHistorique()` trie toujours les `Transaction` avant de les convertir, plutôt que
+de trier les DTO directement.** Le tri (`Comparator.comparing(Transaction::getDate).reversed()`)
+existait déjà avant cette étape et n'a pas été touché : il porte sur des `Transaction`, pas sur
+des `TransactionAffichage`, donc il doit rester avant la boucle de conversion, pas après.
+Convertir d'abord puis trier aurait obligé à écrire un second comparateur pour le DTO, sans
+aucun gain.
+
+### Points à savoir défendre
+
+- **`TransactionAffichage` a-t-il le droit de contenir un `Categorie` (enum du domaine) sans
+  redevenir "une entité qui circule jusqu'à la présentation" ?** Oui : la règle du `CLAUDE.md`
+  cible les entités (`Transaction`, `Epargne`...), pas les énumérations — les vues ont
+  explicitement le droit d'importer `domain.enumeration` pour lire des getters et afficher
+  (`categorie.getLibelle()`). Un DTO qui porte un `Categorie` respecte donc la règle telle
+  qu'elle est écrite.
+- **Pourquoi `ControleurTransaction` n'a-t-il rien à changer alors que quatre méthodes de
+  service changent de type de retour ?** Parce qu'il ne fait qu'enchaîner des appels sans jamais
+  déclarer de variable typée `Transaction` ou `TransactionAffichage` explicitement — il transmet
+  directement le résultat d'un appel de service à un appel de vue. C'est la preuve concrète que
+  ce contrôleur respecte déjà la règle "aucun traitement, seulement des appels".
+- **Le DTO est-il "anémique" comme les entités ?** Oui, volontairement, et pour la même raison :
+  aucune validation, aucun calcul, uniquement des données. La différence avec une entité, c'est
+  qu'un DTO n'a jamais prétendu porter autre chose — il n'y a donc pas de garantie
+  conventionnelle à documenter comme pour `Epargne`/`Transaction` (section 3 du `CLAUDE.md`) : un
+  DTO invalide n'a pas de sens à interdire, puisqu'il ne fait que recopier des données déjà
+  validées par le service qui le construit.
+
+### Pièges rencontrés
+
+Aucun — compilation propre du premier coup (`javac` sur l'ensemble de `src/`), la conversion
+étant mécanique une fois le DTO écrit.
+
+### Reste à faire
+
+Étape 4 (2/2) : `ObjectifAffichage` et `MouvementAffichage` pour l'écran épargne — remplacent le
+trio `List<Epargne>` + deux `List<Double>` parallèles de `VueEpargne.afficherObjectifs()`, et
+`List<MouvementEpargne>` de `afficherMouvements()`. `IServiceEpargne.depasseraCible()` passera
+d'un paramètre `Epargne` à un `idObjectif` ; `getMontantActuel`, `getPourcentageAtteint`,
+`getMontantsActuels`, `getPourcentagesAtteints` sortiront de l'interface (deviendront des
+détails privés de `ServiceEpargne`, plus aucun appelant externe une fois `getObjectifs()` fusionné).
+`MouvementEpargne.toString()` disparaîtra dans la foulée, même raisonnement que
+`Transaction.toString()` ci-dessus. Puis étapes 5 (réduction des dépendances autour de
+`ServicePortefeuille`) et 6 (nettoyage final) du `CLAUDE.md`.
+
+## 2026-08-27 — Correction : convention de nommage des DTO, `TransactionAffichage` devient `TransactionDTO`
+
+### Ce qui a été écrit
+
+`application.dto.TransactionAffichage` renommée en `TransactionDTO` (fichier, classe,
+commentaire de classe), avec toutes ses références mises à jour dans `IServiceTransaction`,
+`ServiceTransaction` et `VueTransaction`.
+
+### Choix de conception
+
+**Suffixe `DTO` retenu plutôt que `Affichage`, pour tous les DTO à venir.** Décidé par
+l'étudiant avant même d'écrire le deuxième DTO : `Affichage` ne convient qu'aux DTO qui
+transportent vers la présentation (le sens qui existait jusqu'ici), alors qu'un futur DTO
+pourrait aussi bien porter des données dans l'autre sens. `DTO` est un suffixe neutre, déjà le
+nom du paquet (`application.dto`) — pas d'ambiguïté possible, et c'est la convention qui sera
+suivie pour la suite de l'étape 4 : `ObjectifDTO`, `MouvementDTO`.
+
+### Points à savoir défendre
+
+**Pourquoi cette correction a sa propre entrée plutôt que de réécrire l'entrée précédente ?**
+Règle du journal, section 10 du `CLAUDE.md` : on n'modifie jamais une entrée existante, même
+pour corriger un nom de classe qui vient de changer. L'entrée précédente reste donc exacte pour
+ce qu'elle décrit — le raisonnement sur la conversion, le `void`, la suppression de
+`toString()` — sauf le nom de la classe, corrigé ici.
+
+### Reste à faire
+
+Étape 4 (2/2), avec la convention `DTO` : `ObjectifDTO` et `MouvementDTO` pour l'écran épargne,
+comme décrit dans l'entrée précédente (le contenu ne change pas, seul le nom des classes à
+créer). Le code de cette sous-étape n'est pas encore écrit : l'étudiant teste et commite d'abord
+l'écran transactions.

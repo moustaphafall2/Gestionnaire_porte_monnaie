@@ -3,7 +3,7 @@ package presentation.view;
 import java.time.LocalDate;
 import java.util.List;
 
-import domain.entity.Transaction;
+import application.dto.TransactionDTO;
 import domain.enumeration.Categorie;
 import domain.enumeration.TypeTransaction;
 
@@ -116,16 +116,26 @@ public class VueTransaction extends VueConsole {
         return lireEntier("Votre choix : ");
     }
 
-    // Affiche chaque transaction (via son toString(), déjà écrit dans l'entité), ou un message
-    // dédié si la liste reçue est vide.
-    public void afficherTransactions(List<Transaction> transactions) {
+    // Affiche chaque transaction, une ligne par transaction, ou un message dédié si la liste
+    // reçue est vide.
+    public void afficherTransactions(List<TransactionDTO> transactions) {
         if (transactions.isEmpty()) {
             afficherMessage("Aucune transaction à afficher.");
             return;
         }
-        for (Transaction transaction : transactions) {
-            afficherMessage(transaction.toString());
+        for (TransactionDTO transaction : transactions) {
+            afficherMessage(formaterLigne(transaction));
         }
+    }
+
+    // Reprend la mise en forme qui vivait auparavant dans Transaction.toString() : depuis
+    // l'introduction des DTO, ni l'entité ni TransactionDTO ne portent de mise en forme,
+    // c'est entièrement le rôle de la vue.
+    private String formaterLigne(TransactionDTO transaction) {
+        String descriptionAffichee = (transaction.getDescription() == null || transaction.getDescription().isBlank())
+                ? "(sans description)" : transaction.getDescription();
+        return transaction.getDate() + " - Transaction " + transaction.getId() + " " + transaction.getCategorie().getLibelle()
+                + " - " + descriptionAffichee + ", montant = " + transaction.getMontant() + ", type = " + transaction.getType();
     }
 
     // Propose toutes les catégories de l'énumération (pas seulement les catégories actives) :

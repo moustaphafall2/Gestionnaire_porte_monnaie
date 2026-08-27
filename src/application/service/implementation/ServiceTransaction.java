@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import application.dto.TransactionDTO;
 import domain.entity.Portefeuille;
 import domain.entity.Transaction;
 import domain.enumeration.Categorie;
@@ -22,6 +23,10 @@ import application.service.interfaces.IServiceTransaction;
     *
     * Il ne détient jamais Portefeuille en attribut : il passe par
     * servicePortefeuille.getDonnees() à chaque appel, comme le veut la règle du projet.
+    *
+    * Depuis l'étape DTO, il ne renvoie plus jamais de Transaction à la présentation : chaque
+    * méthode consultée par ControleurTransaction renvoie un TransactionDTO, construit par
+    * versAffichage() juste avant de sortir du service. La vue ne reçoit donc jamais l'entité.
 */
 public class ServiceTransaction implements IServiceTransaction {
     private final ServicePortefeuille servicePortefeuille;
@@ -107,7 +112,7 @@ public class ServiceTransaction implements IServiceTransaction {
         return description == null ? "" : description;
     }
 
-    public Transaction ajouterDepense(double montant, Categorie categorie, LocalDate date, String description) {
+    public void ajouterDepense(double montant, Categorie categorie, LocalDate date, String description) {
         validerCategorieActive(categorie);
         validerMontant(montant);
         validerType(TypeTransaction.DEPENSE);
@@ -120,10 +125,9 @@ public class ServiceTransaction implements IServiceTransaction {
         Transaction depense = new Transaction(id, montant, TypeTransaction.DEPENSE, categorie, date, normaliserDescription(description));
         portefeuille.ajouterTransaction(depense);
         servicePortefeuille.sauvegarder();
-        return depense;
     }
 
-    public Transaction ajouterRevenu(double montant, Categorie categorie, LocalDate date, String description) {
+    public void ajouterRevenu(double montant, Categorie categorie, LocalDate date, String description) {
         validerCategorieActive(categorie);
         validerMontant(montant);
         validerType(TypeTransaction.REVENU);
@@ -136,7 +140,6 @@ public class ServiceTransaction implements IServiceTransaction {
         Transaction revenu = new Transaction(id, montant, TypeTransaction.REVENU, categorie, date, normaliserDescription(description));
         portefeuille.ajouterTransaction(revenu);
         servicePortefeuille.sauvegarder();
-        return revenu;
     }
 
     public void modifierTransaction(int id, double nouveauMontant, Categorie nouvelleCategorie, LocalDate nouvelleDate, String nouvelleDescription) {
@@ -161,44 +164,49 @@ public class ServiceTransaction implements IServiceTransaction {
 
     // Recherche publique d'une transaction par id, utilisée par ControleurTransaction pour
     // connaître le type de la transaction avant de proposer les catégories actives compatibles,
-    // lors d'une modification.
-    public Transaction getTransaction(int id) {
-        return trouverTransaction(id);
+    // lors d'une modification. Renvoie le DTO, jamais l'entité elle-même.
+    public TransactionDTO getTransaction(int id) {
+        return versAffichage(trouverTransaction(id));
     }
 
     // Historique complet, trié du plus récent au plus ancien
-    public List<Transaction> getHistorique() {
+    public List<TransactionDTO> getHistorique() {
         List<Transaction> historique = new ArrayList<>(servicePortefeuille.getDonnees().getTransactions());
         historique.sort(Comparator.comparing(Transaction::getDate).reversed());
-        return historique;
+
+        List<TransactionDTO> resultat = new ArrayList<>();
+        for (Transaction transaction : historique) {
+            resultat.add(versAffichage(transaction));
+        }
+        return resultat;
     }
 
-    public List<Transaction> filtrerParDate(LocalDate debut, LocalDate fin) {
-        List<Transaction> resultat = new ArrayList<>();
+    public List<TransactionDTO> filtrerParDate(LocalDate debut, LocalDate fin) {
+        List<TransactionDTO> resultat = new ArrayList<>();
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             LocalDate date = transaction.getDate();
             if (!date.isBefore(debut) && !date.isAfter(fin)) {
-                resultat.add(transaction);
+                resultat.add(versAffichage(transaction));
             }
         }
         return resultat;
     }
 
-    public List<Transaction> filtrerParCategorie(Categorie categorie) {
-        List<Transaction> resultat = new ArrayList<>();
+    public List<TransactionDTO> filtrerParCategorie(Categorie categorie) {
+        List<TransactionDTO> resultat = new ArrayList<>();
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             if (transaction.getCategorie() == categorie) {
-                resultat.add(transaction);
+                resultat.add(versAffichage(transaction));
             }
         }
         return resultat;
     }
 
-    public List<Transaction> filtrerParType(TypeTransaction type) {
-        List<Transaction> resultat = new ArrayList<>();
+    public List<TransactionDTO> filtrerParType(TypeTransaction type) {
+        List<TransactionDTO> resultat = new ArrayList<>();
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             if (transaction.getType() == type) {
-                resultat.add(transaction);
+                resultat.add(versAffichage(transaction));
             }
         }
         return resultat;
@@ -212,5 +220,13 @@ public class ServiceTransaction implements IServiceTransaction {
             }
         }
         throw new IllegalArgumentException("Aucune transaction avec l'identifiant " + id + ".");
+    }
+
+    // Construit le DTO transmis à la présentation à partir d'une Transaction du domaine : une
+    // simple copie des champs, sans calcul ni mise en forme (le formatage reste du ressort de
+    // VueTransaction).
+    private TransactionDTO versAffichage(Transaction transaction) {
+        return new TransactionDTO(transaction.getId(), transaction.getMontant(), transaction.getType(),
+                transaction.getCategorie(), transaction.getDate(), transaction.getDescription());
     }
 }
