@@ -1,17 +1,17 @@
 package application.service.implementation;
 
-import domain.entity.Epargne;
 import domain.entity.Portefeuille;
-import domain.entity.Transaction;
-import domain.enumeration.TypeTransaction;
 import application.service.interfaces.IServicePortefeuille;
 import infrastructure.persistence.PortefeuilleRepository;
 
 /*
-    * ServicePortefeuille a trois responsabilités, et pas une de plus : détenir le
-    * Portefeuille, calculer le solde disponible et le total épargné, et déclencher la
-    * sauvegarde. Il n'expose aucune méthode d'accès aux transactions ou aux objectifs :
-    * ce serait dupliquer l'API de l'entité au fil des besoins de chaque service.
+    * ServicePortefeuille a deux responsabilités, et pas une de plus : détenir le Portefeuille, et
+    * déclencher sa sauvegarde. Le calcul du solde disponible et du total épargné, qui vivait ici
+    * jusqu'à l'étape 5, est parti dans ServiceSolde : ni de la détention ni de la persistance,
+    * juste une lecture dérivée des mêmes données, utilisée uniquement par les contrôleurs et
+    * ServiceEpargne — jamais par ServiceTransaction ni ServiceCategorie, qui n'ont besoin que de
+    * détenir/sauvegarder, ni par ServiceStatistique, qui ne dépend même plus de cette classe
+    * depuis cette même étape (voir ServiceStatistique).
     *
     * À la place, getDonnees() (visibilité de paquet) laisse les autres services de
     * application.service.implementation manipuler directement le Portefeuille — mais seulement eux, puisque
@@ -29,47 +29,6 @@ public class ServicePortefeuille implements IServicePortefeuille {
     public ServicePortefeuille(Portefeuille portefeuille, PortefeuilleRepository portefeuilleRepository) {
         this.portefeuille = portefeuille;
         this.portefeuilleRepository = portefeuilleRepository;
-    }
-
-    // Solde disponible = total des revenus - total des dépenses - total actuellement épargné.
-    public double getSoldeDisponible() {
-        double totalRevenus = 0;
-        double totalDepenses = 0;
-
-        for (Transaction transaction : portefeuille.getTransactions()) {
-            if (transaction.getType() == TypeTransaction.REVENU) {
-                totalRevenus += transaction.getMontant();
-            } else {
-                totalDepenses += transaction.getMontant();
-            }
-        }
-
-        return totalRevenus - totalDepenses - getTotalEpargne();
-    }
-
-    // Somme du montant actuellement épargné sur tous les objectifs. Le calcul lui-même passe
-    // par CalculEpargne (partagé avec ServiceEpargne) plutôt que d'être refait ici : le montant
-    // actuel d'un objectif ne doit être calculé qu'à un seul endroit du code.
-    public double getTotalEpargne() {
-        double total = 0;
-        for (Epargne objectif : portefeuille.getObjectifs()) {
-            total += CalculEpargne.calculerMontantActuel(objectif);
-        }
-        return total;
-    }
-
-    // Solde qu'on obtiendrait si cette dépense était enregistrée, sans l'enregistrer.
-    // Utilisé par le contrôleur pour avertir l'utilisateur avant confirmation.
-    public double soldeApresDepense(double montant) {
-        return getSoldeDisponible() - montant;
-    }
-
-    // Règle de gestion "dépense > solde ⇒ autorisée avec avertissement" : le seuil (le calcul
-    // qui décide s'il faut avertir) est ici, dans le service, pas dans le contrôleur. Le
-    // contrôleur ne fait plus que brancher sur ce booléen, exactement comme ServiceEpargne le
-    // fait déjà pour depasseraCible().
-    public boolean depenseRendraSoldeNegatif(double montant) {
-        return soldeApresDepense(montant) < 0;
     }
 
     // Seul point d'écriture du portefeuille sur le disque. Les autres services appellent

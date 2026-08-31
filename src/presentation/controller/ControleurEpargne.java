@@ -4,7 +4,7 @@ import java.time.LocalDate;
 
 import application.dto.ObjectifDTO;
 import application.service.interfaces.IServiceEpargne;
-import application.service.interfaces.IServicePortefeuille;
+import application.service.interfaces.IServiceSolde;
 import presentation.view.VueEpargne;
 
 /*
@@ -23,12 +23,12 @@ import presentation.view.VueEpargne;
 public class ControleurEpargne {
     private final VueEpargne vueEpargne;
     private final IServiceEpargne serviceEpargne;
-    private final IServicePortefeuille servicePortefeuille;
+    private final IServiceSolde serviceSolde;
 
-    public ControleurEpargne(VueEpargne vueEpargne, IServiceEpargne serviceEpargne, IServicePortefeuille servicePortefeuille) {
+    public ControleurEpargne(VueEpargne vueEpargne, IServiceEpargne serviceEpargne, IServiceSolde serviceSolde) {
         this.vueEpargne = vueEpargne;
         this.serviceEpargne = serviceEpargne;
-        this.servicePortefeuille = servicePortefeuille;
+        this.serviceSolde = serviceSolde;
     }
 
     public void creerObjectif() {
@@ -57,7 +57,7 @@ public class ControleurEpargne {
         try {
             ObjectifDTO objectif = serviceEpargne.getObjectif(id);
 
-            vueEpargne.afficherSoldeDisponible(servicePortefeuille.getSoldeDisponible());
+            vueEpargne.afficherSoldeDisponible(serviceSolde.getSoldeDisponible());
             double montant = vueEpargne.demanderMontantContribution();
 
             // Règle de gestion : une contribution qui dépasse la cible reste autorisée, avec un

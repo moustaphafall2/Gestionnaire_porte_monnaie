@@ -11,6 +11,7 @@ import domain.entity.MouvementEpargne;
 import domain.entity.Portefeuille;
 import domain.enumeration.SensMouvement;
 import application.service.interfaces.IServiceEpargne;
+import application.service.interfaces.IServiceSolde;
 
 /*
     * ServiceEpargne porte désormais toutes les règles de gestion des objectifs d'épargne :
@@ -33,6 +34,12 @@ import application.service.interfaces.IServiceEpargne;
     * Depuis l'étape DTO, il ne renvoie plus jamais d'Epargne ni de MouvementEpargne à la
     * présentation : chaque méthode consultée par ControleurEpargne renvoie un ObjectifDTO ou un
     * MouvementDTO, construit par versAffichage() juste avant de sortir du service.
+    *
+    * Depuis l'étape 5, le solde disponible (nécessaire à contribuerObjectif()) ne vient plus de
+    * ServicePortefeuille mais de ServiceSolde, déclaré par son interface IServiceSolde : c'est
+    * le seul de ses deux besoins qui peut passer par une interface, l'autre (détenir/sauvegarder
+    * via getDonnees()) reste forcé de dépendre de la classe concrète ServicePortefeuille (voir
+    * le journal de développement pour la raison technique).
 */
 public class ServiceEpargne implements IServiceEpargne {
     // Les montants sont des FCFA sans centimes, mais restent des double : deux montants
@@ -41,9 +48,11 @@ public class ServiceEpargne implements IServiceEpargne {
     private static final double EPSILON = 0.01;
 
     private final ServicePortefeuille servicePortefeuille;
+    private final IServiceSolde serviceSolde;
 
-    public ServiceEpargne(ServicePortefeuille servicePortefeuille) {
+    public ServiceEpargne(ServicePortefeuille servicePortefeuille, IServiceSolde serviceSolde) {
         this.servicePortefeuille = servicePortefeuille;
+        this.serviceSolde = serviceSolde;
     }
 
     // Montant actuellement épargné sur cet objectif. Le calcul passe par CalculEpargne, partagé
@@ -208,7 +217,7 @@ public class ServiceEpargne implements IServiceEpargne {
         validerSensMouvement(SensMouvement.CONTRIBUTION);
         validerDateMouvement(date);
 
-        double soldeDisponible = servicePortefeuille.getSoldeDisponible();
+        double soldeDisponible = serviceSolde.getSoldeDisponible();
         if (montant > soldeDisponible) {
             throw new IllegalStateException("Le montant de la contribution dépasse le solde disponible ("
                     + soldeDisponible + " FCFA).");

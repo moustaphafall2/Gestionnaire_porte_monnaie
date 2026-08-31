@@ -10,6 +10,7 @@ import infrastructure.persistence.GestionnaireFichier;
 import application.service.implementation.ServiceCategorie;
 import application.service.implementation.ServiceEpargne;
 import application.service.implementation.ServicePortefeuille;
+import application.service.implementation.ServiceSolde;
 import application.service.implementation.ServiceStatistique;
 import application.service.implementation.ServiceTransaction;
 import application.service.interfaces.IServicePortefeuille;
@@ -57,20 +58,21 @@ public class Main {
         }
 
         ServicePortefeuille servicePortefeuille = new ServicePortefeuille(portefeuille, gestionnaireFichier);
+        ServiceSolde serviceSolde = new ServiceSolde(servicePortefeuille);
         ServiceCategorie serviceCategorie = new ServiceCategorie(servicePortefeuille);
         ServiceTransaction serviceTransaction = new ServiceTransaction(servicePortefeuille, serviceCategorie);
-        ServiceEpargne serviceEpargne = new ServiceEpargne(servicePortefeuille);
-        ServiceStatistique serviceStatistique = new ServiceStatistique(servicePortefeuille);
+        ServiceEpargne serviceEpargne = new ServiceEpargne(servicePortefeuille, serviceSolde);
+        ServiceStatistique serviceStatistique = new ServiceStatistique(serviceTransaction);
 
         VueTransaction vueTransaction = new VueTransaction();
         VueEpargne vueEpargne = new VueEpargne();
         VueCategorie vueCategorie = new VueCategorie();
         VueStatistique vueStatistique = new VueStatistique();
 
-        ControleurPortefeuille controleurPortefeuille = new ControleurPortefeuille(vuePrincipale, servicePortefeuille);
+        ControleurPortefeuille controleurPortefeuille = new ControleurPortefeuille(vuePrincipale, serviceSolde);
         ControleurTransaction controleurTransaction = new ControleurTransaction(vueTransaction, serviceTransaction,
-                serviceCategorie, servicePortefeuille);
-        ControleurEpargne controleurEpargne = new ControleurEpargne(vueEpargne, serviceEpargne, servicePortefeuille);
+                serviceCategorie, serviceSolde);
+        ControleurEpargne controleurEpargne = new ControleurEpargne(vueEpargne, serviceEpargne, serviceSolde);
         ControleurCategorie controleurCategorie = new ControleurCategorie(vueCategorie, serviceCategorie);
         ControleurStatistique controleurStatistique = new ControleurStatistique(vueStatistique, serviceStatistique);
 

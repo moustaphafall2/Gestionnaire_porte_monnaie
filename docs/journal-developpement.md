@@ -2646,3 +2646,150 @@ domaine ne circule jusqu'à la présentation, sur les cinq écrans. Ce qui reste
 
 Étape 4 terminée. Sur demande : étape 5 (réduction des dépendances autour de
 `ServicePortefeuille`), étape 6 (nettoyage final).
+
+## 2026-08-31 — Étape 5 : `ServicePortefeuille` réduite à deux rôles, `ServiceSolde` extrait
+
+### Analyse préalable, avant tout code
+
+Avant d'écrire quoi que ce soit, un inventaire complet de qui dépend de `ServicePortefeuille` et
+pour quelles méthodes exactement (montré à l'étudiant, validé avant de coder). Trois constats :
+
+1. **Un seul appelant utilisait vraiment les trois rôles** (détenir, calculer, sauvegarder) :
+   `ServiceEpargne`. `ServiceTransaction` et `ServiceCategorie` n'utilisaient que
+   détention+persistance (jamais le calcul). `ServiceStatistique` n'utilisait que la détention
+   (jamais `sauvegarder()`, lecture seule). Les trois contrôleurs qui en dépendaient
+   (`ControleurPortefeuille`, `ControleurTransaction`, `ControleurEpargne`) n'utilisaient à
+   l'inverse **que** le calcul — jamais la détention (impossible, `getDonnees()` est à
+   visibilité de paquet) ni la persistance (sauf `Main`, cas particulier du réessai après
+   échec).
+2. **Détention et Persistance portent sur le même état** (`sauvegarder()` écrit précisément
+   l'objet que `getDonnees()` renvoie) — quasi indissociables sans dupliquer la référence au
+   `Portefeuille`. **Calcul, en revanche, n'est qu'une lecture dérivée** de ce que les deux
+   autres gèrent, jamais une écriture — une dépendance à sens unique.
+3. Trois options envisagées : ne rien changer ; découper en trois classes (une par rôle) ;
+   n'extraire que le Calcul en gardant Détention+Persistance ensemble. La deuxième a été
+   écartée : elle n'aurait pas réduit le nombre de dépendances de construction vers "quelque
+   chose qui détient le portefeuille", seulement redistribué la même dépendance sur trois
+   petites classes obligées de rester synchronisées — de la cérémonie sans gain, contraire à la
+   priorité 7. La troisième a été retenue : elle isole ce qui ne changera pas avec le passage à
+   une base de données (étape 6 — un calcul reste un calcul, que les données viennent d'un
+   fichier ou d'une base) de ce qui va probablement changer (la persistance, dont la granularité
+   changera très certainement).
+
+### Ce qui a été écrit
+
+- **`ServiceSolde`** (nouvelle classe, `application.service.implementation`) et son interface
+  **`IServiceSolde`** : les quatre méthodes de calcul retirées de `ServicePortefeuille` —
+  `getSoldeDisponible()`, `getTotalEpargne()`, `soldeApresDepense(double)`,
+  `depenseRendraSoldeNegatif(double)` — déplacées telles quelles, sans changement de logique.
+- **`IServicePortefeuille`** : réduite à une seule méthode, `sauvegarder()`. **`ServicePortefeuille`** :
+  ne garde que la détention (`getDonnees()`, visibilité de paquet) et la persistance
+  (`sauvegarder()`) ; les imports devenus inutiles (`Transaction`, `Epargne`, `TypeTransaction`)
+  sont retirés, le commentaire de classe mis à jour.
+- **`ServiceEpargne`** : gagne un second paramètre de constructeur, `IServiceSolde serviceSolde`
+  — le seul de ses deux besoins qui peut se déclarer par interface, `ServicePortefeuille` restant
+  forcée à la classe concrète (voir plus bas). `contribuerObjectif()` appelle désormais
+  `serviceSolde.getSoldeDisponible()` au lieu de `servicePortefeuille.getSoldeDisponible()`.
+- **`ServiceStatistique`** : ne dépend plus de `ServicePortefeuille` du tout, mais de
+  `IServiceTransaction`. `getStatistiques()` parcourt `serviceTransaction.getHistorique()` (une
+  `List<TransactionDTO>`) au lieu de `servicePortefeuille.getDonnees().getTransactions()` — la
+  boucle de calcul n'a pas changé d'une ligne, seule sa source change (voir "Choix de
+  conception" pour la question que ça soulève).
+- **`ControleurPortefeuille`, `ControleurTransaction`, `ControleurEpargne`** : leur dépendance à
+  `IServicePortefeuille` est remplacée par `IServiceSolde`, seul rôle dont ils avaient besoin.
+- **`Main`** : construit `ServiceSolde` juste après `ServicePortefeuille`, le relie à
+  `ServiceEpargne` et aux trois contrôleurs concernés ; `ServiceStatistique` reçoit désormais
+  `serviceTransaction` au lieu de `servicePortefeuille`.
+
+### Choix de conception
+
+**Dépendance à une classe concrète plutôt qu'à une interface — décision assumée, pas un oubli
+de la règle 5.** `ServiceSolde`, comme `ServiceCategorie`, `ServiceTransaction` et `ServiceEpargne`
+avant lui, dépend de `ServicePortefeuille` (la classe) et non d'`IServicePortefeuille`
+(l'interface), parce qu'il appelle `getDonnees()` — une méthode à **visibilité de paquet**. Une
+interface Java ne peut déclarer que des méthodes publiques (ou `private`/`static` depuis Java 9,
+mais jamais accessibles depuis l'extérieur) : il est **structurellement impossible** d'y placer
+une méthode à visibilité de paquet. Ce n'est donc pas un choix de conception qu'on aurait pu
+faire autrement en respectant la règle 5 — c'est une contrainte du langage. **Ce n'est pas la
+première fois que ce cas se présente** : `ServiceTransaction` dépend déjà de la classe concrète
+`ServiceCategorie` (et non d'`IServiceCategorie`) pour exactement la même raison, parce qu'elle
+appelle `estActive(Categorie)`, elle aussi à visibilité de paquet. Deux occurrences indépendantes
+de la même contrainte, dans deux parties différentes du code, confirment qu'il s'agit d'un
+principe du langage et non d'un oubli isolé : **chaque fois qu'un service a besoin d'un accès
+réservé aux autres services du même paquet, sa dépendance à ce service est nécessairement
+déclarée par la classe concrète, jamais par l'interface publique.** La règle 5 continue de
+s'appliquer partout ailleurs, sans exception : c'est précisément parce que ce sont les deux seuls
+cas où un besoin dépasse ce que l'interface publique peut exposer.
+
+**Pourquoi `ServiceStatistique` dépend d'`IServiceTransaction` plutôt que de rester sur
+`ServicePortefeuille`, ou de passer par `ServiceSolde`.** Deux pistes écartées avant de choisir
+celle-ci :
+- *Passer par `ServiceSolde`* : rejeté, `ServiceSolde` n'expose que des valeurs déjà calculées
+  (solde, total épargné), jamais la liste des transactions — `ServiceStatistique` a besoin de
+  les parcourir une par une pour construire le total par catégorie, ce que `ServiceSolde` ne
+  pourrait offrir qu'en récupérant lui-même un accès aux données brutes, recréant exactement le
+  problème que la visibilité de paquet de `getDonnees()` empêche.
+- *Un accès en lecture partagé dédié* : rejeté pour la même raison — exposer publiquement une
+  vue en lecture de `Portefeuille` rouvrirait la porte que `getDonnees()` ferme délibérément.
+- *Retenu : `IServiceTransaction.getHistorique()`*, déjà une méthode publique qui expose
+  l'intégralité des transactions, sous forme de `TransactionDTO` depuis l'étape 4. `ServiceStatistique`
+  n'a donc plus besoin de `ServicePortefeuille` du tout — un service de moins accroché au pivot,
+  exactement l'objectif de cette étape — et sa dépendance se déclare proprement par interface,
+  ce que `ServicePortefeuille` ne pouvait jamais lui offrir.
+
+**Arbitrage assumé : un service peut consommer le DTO d'un autre service, malgré le principe
+"DTO = transfert vers la présentation".** Question posée explicitement avant de coder : est-ce
+que `ServiceStatistique` qui lit des `TransactionDTO` (construits par `ServiceTransaction`)
+sort du rôle que l'étape 4 avait donné aux DTO ? Réponse retenue : non, et pour une raison
+précise, pas seulement parce que "ça marche". Le risque qu'on redoute normalement quand un DTO
+sert deux publics différents, c'est qu'il dérive vers les besoins de l'un (par exemple un champ
+de mise en forme utile à l'affichage) et casse l'autre. **Ce risque est structurellement écarté
+ici** : la règle du `CLAUDE.md` interdit tout calcul et toute mise en forme dans un DTO —
+`TransactionDTO` ne peut donc jamais être qu'un miroir brut des champs de `Transaction`, il n'a
+nulle part où dériver vers l'un ou l'autre besoin, puisqu'aucun des deux camps n'a le droit d'y
+injecter sa propre logique. La phrase du `CLAUDE.md` ("DTO... objets de transfert entre les
+services et la présentation") décrit la raison d'être du DTO — pourquoi il existe, empêcher les
+entités de circuler jusqu'à la vue — pas une exclusivité sur qui peut le lire ensuite. L'alternative
+qui aurait évité complètement la question (un accès à visibilité de paquet dédié à
+`ServiceStatistique`, sur le modèle de `getDonnees()`) aurait coûté plus cher qu'elle n'aurait
+rapporté : une troisième occurrence de "dépendance à une classe concrète pour une méthode à
+visibilité de paquet", alors que le but de cette étape est justement d'en réduire le nombre, pas
+de l'augmenter.
+
+### Points à savoir défendre
+
+- **`ServicePortefeuille` a-t-elle encore trois responsabilités ?** Non, deux : détenir le
+  `Portefeuille`, déclencher sa sauvegarde. Le calcul a son propre service (`ServiceSolde`)
+  depuis cette étape.
+- **Pourquoi ne pas avoir séparé aussi Détention de Persistance, pour aller au bout de la
+  logique "un rôle, une classe" ?** Parce que les deux portent sur le même état : `sauvegarder()`
+  écrit précisément ce que `getDonnees()` détient. Les séparer aurait exigé que l'une des deux
+  classes reçoive une référence sur l'autre (ou que la référence au `Portefeuille` soit
+  dupliquée, ce qui est pire) — un découplage de façade, pas un vrai gain, contraire à la
+  priorité 7.
+- **`ServiceEpargne` dépend-elle maintenant de deux services différents pour un besoin qui
+  semble proche (solde, calcul) ?** Elle dépend de `ServicePortefeuille` (classe concrète, pour
+  détenir/sauvegarder ses propres objectifs) et d'`IServiceSolde` (interface, pour vérifier le
+  solde avant une contribution) — deux rôles réellement distincts malgré la proximité
+  apparente : l'un modifie l'état du portefeuille, l'autre ne fait que le consulter.
+- **`IServicePortefeuille` a-t-elle encore un sens avec une seule méthode ?** Oui : c'est
+  précisément le seul rôle qui doit rester visible en dehors du paquet des services — `Main`, qui
+  réessaie `sauvegarder()` après un échec. Une interface à une méthode n'est pas un défaut en
+  soi, c'est le reflet exact de ce qui doit franchir la frontière du paquet.
+
+### Pièges rencontrés
+
+Aucun — compilation propre du premier coup sur l'ensemble de `src/` (`javac -Xlint:all`), les
+seuls avertissements restants (`serialVersionUID`, classe interne de Gson) préexistaient déjà.
+
+### Vérification
+
+`ServicePortefeuille` (classe concrète) n'a plus que quatre services dépendants
+(`ServiceSolde`, `ServiceCategorie`, `ServiceTransaction`, `ServiceEpargne`) au lieu de cinq —
+`ServiceStatistique` n'en dépend plus. `IServicePortefeuille` (l'interface) n'a plus qu'un seul
+appelant, `Main`.
+
+### Reste à faire
+
+Sur demande : étape 6 (passage à une base de données, nouvelle implémentation de
+`PortefeuilleRepository`), étape 7 (nettoyage final).

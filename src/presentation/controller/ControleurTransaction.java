@@ -5,7 +5,7 @@ import java.time.LocalDate;
 import domain.enumeration.Categorie;
 import domain.enumeration.TypeTransaction;
 import application.service.interfaces.IServiceCategorie;
-import application.service.interfaces.IServicePortefeuille;
+import application.service.interfaces.IServiceSolde;
 import application.service.interfaces.IServiceTransaction;
 import presentation.view.VueTransaction;
 
@@ -27,14 +27,14 @@ public class ControleurTransaction {
     private final VueTransaction vueTransaction;
     private final IServiceTransaction serviceTransaction;
     private final IServiceCategorie serviceCategorie;
-    private final IServicePortefeuille servicePortefeuille;
+    private final IServiceSolde serviceSolde;
 
     public ControleurTransaction(VueTransaction vueTransaction, IServiceTransaction serviceTransaction,
-            IServiceCategorie serviceCategorie, IServicePortefeuille servicePortefeuille) {
+            IServiceCategorie serviceCategorie, IServiceSolde serviceSolde) {
         this.vueTransaction = vueTransaction;
         this.serviceTransaction = serviceTransaction;
         this.serviceCategorie = serviceCategorie;
-        this.servicePortefeuille = servicePortefeuille;
+        this.serviceSolde = serviceSolde;
     }
 
     public void ajouterDepense() {
@@ -51,10 +51,10 @@ public class ControleurTransaction {
         vueTransaction.afficherRecapitulatif(montant, categorie, date);
 
         // Règle de gestion "dépense > solde ⇒ avertissement" : le seuil est calculé par
-        // ServicePortefeuille.depenseRendraSoldeNegatif(), pas ici. Le contrôleur ne fait que
-        // brancher sur ce booléen, exactement comme pour ServiceEpargne.depasseraCible().
-        if (servicePortefeuille.depenseRendraSoldeNegatif(montant)) {
-            vueTransaction.afficherAvertissementSoldeNegatif(servicePortefeuille.soldeApresDepense(montant));
+        // ServiceSolde.depenseRendraSoldeNegatif(), pas ici. Le contrôleur ne fait que brancher
+        // sur ce booléen, exactement comme pour ServiceEpargne.depasseraCible().
+        if (serviceSolde.depenseRendraSoldeNegatif(montant)) {
+            vueTransaction.afficherAvertissementSoldeNegatif(serviceSolde.soldeApresDepense(montant));
         }
 
         if (!vueTransaction.demanderConfirmationDepense()) {
