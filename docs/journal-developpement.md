@@ -2793,3 +2793,115 @@ appelant, `Main`.
 
 Sur demande : étape 6 (passage à une base de données, nouvelle implémentation de
 `PortefeuilleRepository`), étape 7 (nettoyage final).
+
+## 2026-08-31 — Étape 6 (1/3) : PostgreSQL en conteneur, schéma SQL, connexion JDBC minimale
+
+### Analyse préalable, avant tout code
+
+Une analyse complète a été présentée et validée avant d'écrire quoi que ce soit : schéma des
+quatre tables, devenir des identifiants, évolution de `PortefeuilleRepository`, fichiers Docker,
+cas de l'application console, connexion JDBC, ordre de travail, estimation de l'ampleur. Deux
+décisions structurantes, actées avant de coder :
+
+- **Détention conservée** : `ServicePortefeuille`/`Portefeuille`/`getDonnees()` restent en
+  principe ce qu'ils sont aujourd'hui ; seule la persistance devient granulaire (une méthode par
+  mutation, plus de réécriture complète). L'alternative — dissoudre `ServicePortefeuille` en
+  trois dépôts séparés par agrégat — a été écartée pour cette migration : plus cohérente à terme
+  avec la réduction des dépendances de l'étape 5, mais un chantier bien trop large à cumuler avec
+  le passage à une vraie base la même soirée.
+- **Docker limité à PostgreSQL et pgAdmin** : l'application reste lancée depuis VS Code, en
+  dehors de tout conteneur. `Scanner(System.in)` a besoin d'un terminal interactif, que
+  `docker compose up` ne fournit pas nativement — conteneuriser aussi l'application aurait
+  imposé `docker compose run --rm` à chaque lancement et une image à reconstruire après chaque
+  modification, un risque de friction en direct le jour de la présentation.
+
+Deux ajustements demandés sur le schéma proposé, avant de créer quoi que ce soit :
+
+- **`transaction` renommée en `transaction_financiere`** : `TRANSACTION` est un mot réservé SQL,
+  qu'il aurait fallu échapper dans certaines requêtes (`SELECT * FROM "transaction"`). Le nom
+  choisi évite aussi toute ambiguïté avec le sens habituel du mot en base de données (une
+  transaction SQL, `BEGIN`/`COMMIT`), différent d'une transaction financière.
+- **`Categorie.EntretienVestimentaire` renommée en `ENTRETIEN_VESTIMENTAIRE`**, avant la
+  création des tables : seule constante de l'énumération à une casse différente des onze autres,
+  visible en clair dans les contraintes SQL. La corriger maintenant évite de figer cette
+  incohérence dans un schéma de base de données, plus coûteux à corriger après coup qu'une
+  constante Java. Vérifié par recherche sur tout `src/` : cette constante n'était référencée nulle
+  part ailleurs que dans sa propre déclaration (toujours atteinte via `Categorie.values()` ou son
+  libellé affiché "Entretien vestimentaire", jamais nommée directement) — renommage sans risque,
+  confirmé par une recompilation complète immédiatement après.
+
+### Ce qui a été écrit
+
+- **`docker-compose.yml`** (racine) : deux services, `db` (`postgres:16-alpine`) et `pgadmin`
+  (`dpage/pgadmin4`), un volume nommé par service (`db_data`, `pgadmin_data`) pour que les
+  données survivent à un redémarrage des conteneurs. Port `5433` exposé pour PostgreSQL (pas
+  `5432`) pour éviter un conflit avec un PostgreSQL déjà installé sur la machine hôte.
+- **`sql/schema.sql`** : les quatre `CREATE TABLE` (`categorie_active`, `transaction_financiere`,
+  `epargne`, `mouvement_epargne`), avec les contraintes `CHECK` qui reproduisent les invariants
+  déjà portés par les services (montant positif, date pas dans le futur, nom non vide...).
+  Commentaires dans le script lui-même expliquant chaque choix (absence de table `portefeuille`,
+  absence de clé étrangère entre `transaction_financiere.categorie` et `categorie_active`).
+- **`Categorie.java`** : `EntretienVestimentaire` renommée en `ENTRETIEN_VESTIMENTAIRE`, comme
+  décidé ci-dessus. Le libellé affiché ("Entretien vestimentaire") ne change pas : c'est une
+  donnée, indépendante du nom de la constante.
+- **`lib/postgresql-42.7.4.jar`** : le pilote JDBC PostgreSQL, ajouté manuellement au projet
+  comme Gson (pas de gestionnaire de dépendances), somme de contrôle MD5 vérifiée contre celle
+  publiée par Maven Central avant utilisation.
+- **`infrastructure/persistence/ConnexionBaseDeDonnees.java`** : une seule méthode publique,
+  `ouvrir()`, qui lit `db.properties` et renvoie une `Connection` JDBC. Deviendra le point
+  d'entrée de l'implémentation de `PortefeuilleRepository` à écrire à la sous-étape suivante.
+- **`db.properties`** (non versionné) et **`db.properties.example`** (versionné, sans valeur
+  secrète) : les paramètres de connexion, jamais écrits en dur dans le code.
+- **`src/TesterConnexion.java`** : programme de vérification autonome, hors architecture (ni
+  `domain`, ni `application`, ni `infrastructure`, ni `presentation`), qui ouvre une connexion et
+  exécute `SELECT 1`. À supprimer une fois la connexion validée.
+- **`.gitignore`** : `db.properties` ajouté, même traitement que `portefeuille.json` — des
+  paramètres locaux, jamais du code source.
+
+### Choix de conception
+
+**Pourquoi `TesterConnexion` est une classe à part, hors de l'architecture en couches, plutôt
+qu'un ajout temporaire dans `Main`.** Elle n'a aucune vocation à durer : une fois la connexion
+validée, elle disparaît. La glisser dans `Main` aurait mélangé du code de vérification jetable
+avec le point d'entrée réel de l'application, qui doit rester lisible pour la soutenance à tout
+moment de la migration — jamais un état intermédiaire encombré de code de test oublié.
+
+**Pourquoi `ConnexionBaseDeDonnees` n'a qu'une seule méthode, et pourquoi elle est déjà écrite
+"pour de vrai" plutôt que comme un brouillon jetable comme `TesterConnexion`.** Contrairement au
+test de connexion, cette classe sera réutilisée telle quelle par le vrai `PortefeuilleRepository`
+à la sous-étape suivante — l'écrire proprement maintenant évite de la réécrire dans deux jours.
+
+**Pourquoi vérifier la somme de contrôle du pilote JDBC avant de l'utiliser.** Un fichier `.jar`
+téléchargé et exécuté fait partie du code qui tourne dans l'application : la même vigilance que
+pour n'importe quelle dépendance ajoutée au projet (déjà le cas pour Gson, fourni tel quel dans
+`lib/`). La somme MD5 obtenue par une requête `HEAD` sur Maven Central correspond exactement à
+celle du fichier téléchargé.
+
+### Points à savoir défendre
+
+- **Pourquoi `db.properties.example` existe en plus de `db.properties` ?** `db.properties`
+  contient les vrais paramètres de connexion, jamais versionné (règle du `CLAUDE.md`).
+  `db.properties.example` est versionné : il montre les clés attendues (`url`, `utilisateur`,
+  `motDePasse`) sans révéler de valeur réelle, pour qu'un autre poste (ou la maîtresse de stage)
+  sache quoi remplir sans avoir à deviner.
+- **Le pilote JDBC s'enregistre-t-il tout seul auprès de `DriverManager` ?** Oui, depuis JDBC 4
+  (Java 6) : un fichier de méta-données dans le `.jar` du pilote (`META-INF/services/java.sql.Driver`)
+  est lu automatiquement par la JVM au démarrage, dès que le `.jar` est dans le classpath. Aucun
+  `Class.forName("org.postgresql.Driver")` à écrire, contrairement aux très anciens tutoriels
+  JDBC.
+
+### Pièges rencontrés
+
+Aucun — compilation propre du premier coup, `docker` et `docker compose` déjà disponibles sur la
+machine.
+
+### Reste à faire
+
+**Étape en cours, arrêtée volontairement après cette sous-étape** : l'étudiant doit d'abord
+lancer les conteneurs, créer le schéma, et valider la connexion (`TesterConnexion`) avant que le
+vrai `PortefeuilleRepository` ne soit écrit. Sous-étape suivante (2/3) : l'implémentation JDBC de
+`PortefeuilleRepository`, méthode par méthode, en commençant par `charger()` ; adaptation de
+`Portefeuille` (retrait des compteurs), `ServicePortefeuille`, `IServicePortefeuille`,
+`ServiceTransaction`, `ServiceEpargne`, `ServiceCategorie`, `Main`. Sous-étape (3/3), en tout
+dernier et seulement une fois les sept écrans validés avec la base : suppression de
+`GestionnaireFichier`, `lib/gson-2.13.1.jar`, `portefeuille.json`, `TesterConnexion.java`.

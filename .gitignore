@@ -5,4 +5,7 @@ bin/
 # Données de l'utilisateur (générées à l'exécution, pas du code source)
 portefeuille.json
 
+# Paramètres de connexion à la base de données (voir db.properties.example pour le modèle)
+db.properties
+
 CLAUDE.md

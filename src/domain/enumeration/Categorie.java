@@ -16,7 +16,7 @@ public enum Categorie {
     LOISIRS("Loisirs", TypeTransaction.DEPENSE),
     SANTE("Santé", TypeTransaction.DEPENSE),
     ABONNEMENTS("Abonnements", TypeTransaction.DEPENSE),
-    EntretienVestimentaire("Entretien vestimentaire", TypeTransaction.DEPENSE),
+    ENTRETIEN_VESTIMENTAIRE("Entretien vestimentaire", TypeTransaction.DEPENSE),
     COUTURE("Coûture", TypeTransaction.DEPENSE),
     AUTRE_DEPENSE("Autre dépense", TypeTransaction.DEPENSE),
     SALAIRE("Salaire", TypeTransaction.REVENU),

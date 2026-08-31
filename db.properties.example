@@ -1,0 +1,5 @@
+# Modèle du fichier db.properties, à copier et remplir localement (db.properties n'est jamais
+# versionné, voir .gitignore). Les valeurs ci-dessous correspondent au docker-compose.yml fourni.
+url=jdbc:postgresql://localhost:5433/porte_monnaie
+utilisateur=porte_monnaie
+motDePasse=porte_monnaie
