@@ -1,26 +1,36 @@
 package application.service.implementation;
 
+import java.time.LocalDate;
+
 import domain.entity.Portefeuille;
+import domain.enumeration.Categorie;
+import domain.enumeration.SensMouvement;
+import domain.enumeration.TypeTransaction;
 import application.service.interfaces.IServicePortefeuille;
 import infrastructure.persistence.PortefeuilleRepository;
 
 /*
     * ServicePortefeuille a deux responsabilités, et pas une de plus : détenir le Portefeuille, et
-    * déclencher sa sauvegarde. Le calcul du solde disponible et du total épargné, qui vivait ici
-    * jusqu'à l'étape 5, est parti dans ServiceSolde : ni de la détention ni de la persistance,
-    * juste une lecture dérivée des mêmes données, utilisée uniquement par les contrôleurs et
-    * ServiceEpargne — jamais par ServiceTransaction ni ServiceCategorie, qui n'ont besoin que de
-    * détenir/sauvegarder, ni par ServiceStatistique, qui ne dépend même plus de cette classe
-    * depuis cette même étape (voir ServiceStatistique).
+    * transmettre à PortefeuilleRepository chaque mutation déjà validée par les autres services.
+    * Le calcul du solde disponible et du total épargné vit dans ServiceSolde (étape 5) ; la façon
+    * dont les données sont réellement stockées (PostgreSQL depuis cette étape) vit dans
+    * PortefeuilleRepository, jamais ici.
+    *
+    * Chaque méthode enregistrerXxx() est un simple relais vers PortefeuilleRepository — jamais
+    * l'endroit où la structure du Portefeuille en mémoire change : ça reste le rôle des méthodes
+    * de Portefeuille elle-même (ajouterTransaction, retirerObjectif, activerCategorie...),
+    * appelées par les autres services via getDonnees(). Nom volontairement différent de ces
+    * méthodes structurelles (enregistrer, pas ajouter/retirer/activer) : les deux se ressemblent
+    * mais ne font pas la même chose, l'une écrit sur la base, l'autre mute la mémoire.
+    *
+    * Ordre attendu chez l'appelant, systématique depuis cette étape : persister d'abord
+    * (enregistrerXxx), muter la mémoire ensuite. Jamais l'inverse — voir le journal de
+    * développement pour la raison (génération des identifiants par la base, disparition de la
+    * boucle de reprise après échec de sauvegarde).
     *
     * À la place, getDonnees() (visibilité de paquet) laisse les autres services de
-    * application.service.implementation manipuler directement le Portefeuille — mais seulement eux, puisque
-    * les contrôleurs et les vues sont dans d'autres paquets et n'y ont pas accès.
-    *
-    * La persistance passe par PortefeuilleRepository, jamais par GestionnaireFichier
-    * directement : ce service ignore tout du stockage réel (fichier JSON aujourd'hui), il ne
-    * connaît que charger()/sauvegarder(). Seul Main sait que l'implémentation concrète est
-    * GestionnaireFichier.
+    * application.service.implementation manipuler directement le Portefeuille — mais seulement
+    * eux, puisque les contrôleurs et les vues sont dans d'autres paquets et n'y ont pas accès.
 */
 public class ServicePortefeuille implements IServicePortefeuille {
     private final Portefeuille portefeuille;
@@ -31,11 +41,36 @@ public class ServicePortefeuille implements IServicePortefeuille {
         this.portefeuilleRepository = portefeuilleRepository;
     }
 
-    // Seul point d'écriture du portefeuille sur le disque. Les autres services appellent
-    // cette méthode après chaque opération validée, plutôt que de détenir eux-mêmes
-    // PortefeuilleRepository ou Portefeuille.
-    public void sauvegarder() {
-        portefeuilleRepository.sauvegarder(portefeuille);
+    public void enregistrerActivationCategorie(Categorie categorie) {
+        portefeuilleRepository.activerCategorie(categorie);
+    }
+
+    public void enregistrerDesactivationCategorie(Categorie categorie) {
+        portefeuilleRepository.desactiverCategorie(categorie);
+    }
+
+    public int enregistrerNouvelleTransaction(double montant, TypeTransaction type, Categorie categorie, LocalDate date, String description) {
+        return portefeuilleRepository.ajouterTransaction(montant, type, categorie, date, description);
+    }
+
+    public void enregistrerModificationTransaction(int id, double montant, Categorie categorie, LocalDate date, String description) {
+        portefeuilleRepository.modifierTransaction(id, montant, categorie, date, description);
+    }
+
+    public void enregistrerSuppressionTransaction(int id) {
+        portefeuilleRepository.supprimerTransaction(id);
+    }
+
+    public int enregistrerNouvelObjectif(String nom, double montantCible, LocalDate dateLimite) {
+        return portefeuilleRepository.ajouterObjectif(nom, montantCible, dateLimite);
+    }
+
+    public void enregistrerNouveauMouvement(int idObjectif, double montant, SensMouvement sens, LocalDate date) {
+        portefeuilleRepository.ajouterMouvement(idObjectif, montant, sens, date);
+    }
+
+    public void enregistrerSuppressionObjectif(int id) {
+        portefeuilleRepository.supprimerObjectif(id);
     }
 
     // Visibilité de paquet, volontairement : seuls les services de application.service.implementation (le même

@@ -6,14 +6,13 @@ import presentation.controller.ControleurTransaction;
 import domain.entity.Portefeuille;
 import exception.ErreurChargementException;
 import exception.ErreurSauvegardeException;
-import infrastructure.persistence.GestionnaireFichier;
+import infrastructure.persistence.GestionnairePostgreSQL;
 import application.service.implementation.ServiceCategorie;
 import application.service.implementation.ServiceEpargne;
 import application.service.implementation.ServicePortefeuille;
 import application.service.implementation.ServiceSolde;
 import application.service.implementation.ServiceStatistique;
 import application.service.implementation.ServiceTransaction;
-import application.service.interfaces.IServicePortefeuille;
 import presentation.view.VueCategorie;
 import presentation.view.VueEpargne;
 import presentation.view.VuePrincipale;
@@ -22,7 +21,7 @@ import presentation.view.VueTransaction;
 
 /*
     * Point d'entrée du programme. Son unique rôle est d'initialiser les objets nécessaires
-    * (GestionnaireFichier, Portefeuille, les services, les vues, les contrôleurs), de tenir la
+    * (GestionnairePostgreSQL, Portefeuille, les services, les vues, les contrôleurs), de tenir la
     * boucle du menu principal et d'aiguiller chaque choix vers le contrôleur concerné. C'est ici,
     * et seulement ici, que les dépendances entre services et contrôleurs sont reliées, et que
     * plusieurs contrôleurs différents sont appelés depuis un même endroit — un contrôleur, lui,
@@ -34,30 +33,30 @@ import presentation.view.VueTransaction;
     * son switch directement sur cette valeur, sans méthode intermédiaire ni le moindre texte à
     * lui, pour que tout le cheminement de l'application se lise ici, à un seul endroit.
     *
-    * La reprise après un échec de sauvegarde est traitée une seule fois, autour de l'appel au
-    * contrôleur : avant, chaque contrôleur qui modifiait des données héritait cette logique de
-    * ControleurConsole. Cette classe a disparu avec ControleurPrincipal (qui n'était plus qu'un
-    * aiguilleur entre contrôleurs, un rôle que Main tient déjà par nature).
+    * Depuis l'étape 6, un échec d'écriture (ErreurSauvegardeException) ne déclenche plus de
+    * boucle de reprise : chaque service persiste avant de modifier la mémoire (voir
+    * ServicePortefeuille), donc un échec ne laisse plus rien en suspens à rattraper — l'opération
+    * n'a simplement pas eu lieu, ni en base ni en mémoire. Main se contente d'afficher l'erreur et
+    * de reprendre la boucle du menu.
 */
 public class Main {
     public static void main(String[] args) {
-        GestionnaireFichier gestionnaireFichier = new GestionnaireFichier("portefeuille.json");
+        GestionnairePostgreSQL portefeuilleRepository = new GestionnairePostgreSQL();
         VuePrincipale vuePrincipale = new VuePrincipale();
 
-        // GestionnaireFichier.charger() absorbe déjà fichier absent/vide/JSON malformé en
-        // renvoyant un portefeuille vide ; seule une vraie erreur de lecture disque (droits,
-        // panne...) lève ErreurChargementException. Sans portefeuille valide, rien d'autre ne
-        // peut démarrer : on affiche un message lisible et on arrête proprement, jamais de
-        // trace d'exception brute.
+        // charger() absorbe déjà une base vide (premier lancement) en renvoyant un portefeuille
+        // vide ; seule une vraie erreur de connexion ou de lecture lève ErreurChargementException.
+        // Sans portefeuille valide, rien d'autre ne peut démarrer : on affiche un message lisible
+        // et on arrête proprement, jamais de trace d'exception brute.
         Portefeuille portefeuille;
         try {
-            portefeuille = gestionnaireFichier.charger();
+            portefeuille = portefeuilleRepository.charger();
         } catch (ErreurChargementException erreur) {
             vuePrincipale.afficherErreur(erreur.getMessage());
             return;
         }
 
-        ServicePortefeuille servicePortefeuille = new ServicePortefeuille(portefeuille, gestionnaireFichier);
+        ServicePortefeuille servicePortefeuille = new ServicePortefeuille(portefeuille, portefeuilleRepository);
         ServiceSolde serviceSolde = new ServiceSolde(servicePortefeuille);
         ServiceCategorie serviceCategorie = new ServiceCategorie(servicePortefeuille);
         ServiceTransaction serviceTransaction = new ServiceTransaction(servicePortefeuille, serviceCategorie);
@@ -129,32 +128,13 @@ public class Main {
                     default -> vuePrincipale.afficherChoixInvalide();
                 }
             } catch (ErreurSauvegardeException erreur) {
-                confirmerNouvelleSauvegarde(vuePrincipale, servicePortefeuille, erreur);
+                // Rien à rattraper : l'opération n'a pas été appliquée (voir ServicePortefeuille,
+                // persister précède toujours muter la mémoire depuis cette étape). L'application
+                // reprend simplement la boucle du menu.
+                vuePrincipale.afficherErreur(erreur.getMessage());
             }
         }
 
         vuePrincipale.afficherAuRevoir();
-    }
-
-    // Réessaie uniquement l'écriture sur le disque, jamais l'action elle-même : elle a déjà eu
-    // lieu en mémoire au moment où le contrôleur appelé ci-dessus a levé cette exception (voir
-    // ServicePortefeuille.sauvegarder()). Tant que l'utilisateur accepte de réessayer, on
-    // rappelle directement servicePortefeuille.sauvegarder() ; s'il refuse, l'application
-    // continue sans bloquer, avec un message clair sur les données non encore enregistrées.
-    // Anciennement ControleurConsole.confirmerNouvelleSauvegarde(), héritée par trois
-    // contrôleurs ; écrite une seule fois ici, puisque plus aucun contrôleur ne la porte.
-    private static void confirmerNouvelleSauvegarde(VuePrincipale vuePrincipale, IServicePortefeuille servicePortefeuille,
-            ErreurSauvegardeException erreur) {
-        String messageErreur = erreur.getMessage();
-        while (vuePrincipale.demanderNouvelleTentativeSauvegarde(messageErreur)) {
-            try {
-                servicePortefeuille.sauvegarder();
-                vuePrincipale.afficherSauvegardeReussie();
-                return;
-            } catch (ErreurSauvegardeException nouvelleErreur) {
-                messageErreur = nouvelleErreur.getMessage();
-            }
-        }
-        vuePrincipale.afficherSauvegardeAbandonnee();
     }
 }

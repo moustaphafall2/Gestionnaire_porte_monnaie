@@ -33,16 +33,16 @@ public class ServiceCategorie implements IServiceCategorie{
     }
 
     public void activerCategorie(Categorie categorie) {
+        servicePortefeuille.enregistrerActivationCategorie(categorie);
         servicePortefeuille.getDonnees().activerCategorie(categorie);
-        servicePortefeuille.sauvegarder();
     }
 
     // Règle de gestion : la désactivation n'a aucun effet sur les transactions déjà
     // enregistrées avec cette catégorie. Portefeuille.desactiverCategorie ne fait que la
     // retirer de l'ensemble des catégories actives, jamais des transactions elles-mêmes.
     public void desactiverCategorie(Categorie categorie) {
+        servicePortefeuille.enregistrerDesactivationCategorie(categorie);
         servicePortefeuille.getDonnees().desactiverCategorie(categorie);
-        servicePortefeuille.sauvegarder();
     }
 
     // Indique si au moins une catégorie active correspond à ce type. Utilisé par

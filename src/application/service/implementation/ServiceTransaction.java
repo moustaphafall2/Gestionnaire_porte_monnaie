@@ -6,7 +6,6 @@ import java.util.Comparator;
 import java.util.List;
 
 import application.dto.TransactionDTO;
-import domain.entity.Portefeuille;
 import domain.entity.Transaction;
 import domain.enumeration.Categorie;
 import domain.enumeration.TypeTransaction;
@@ -27,6 +26,12 @@ import application.service.interfaces.IServiceTransaction;
     * Depuis l'étape DTO, il ne renvoie plus jamais de Transaction à la présentation : chaque
     * méthode consultée par ControleurTransaction renvoie un TransactionDTO, construit par
     * versAffichage() juste avant de sortir du service. La vue ne reçoit donc jamais l'entité.
+    *
+    * Depuis l'étape 6, l'identifiant d'une nouvelle transaction vient de la base
+    * (servicePortefeuille.enregistrerNouvelleTransaction(), qui appelle PortefeuilleRepository) :
+    * il n'existe plus de compteur à lire avant de construire l'objet. Conséquence sur l'ordre des
+    * opérations, systématique désormais : persister d'abord, construire ou muter la mémoire
+    * ensuite — jamais l'inverse, contrairement à avant cette étape.
 */
 public class ServiceTransaction implements IServiceTransaction {
     private final ServicePortefeuille servicePortefeuille;
@@ -46,23 +51,13 @@ public class ServiceTransaction implements IServiceTransaction {
         }
     }
 
-    // Anciennement Transaction.validerId(). L'identifiant est toujours généré par
-    // genererIdTransaction() ci-dessous, donc toujours strictement positif en pratique ; ce
-    // contrôle reste défensif, au cas où cette génération changerait un jour.
+    // Anciennement Transaction.validerId(). L'identifiant est toujours généré par la base
+    // (servicePortefeuille.enregistrerNouvelleTransaction()), donc toujours strictement positif
+    // en pratique ; ce contrôle reste défensif, au cas où cette génération changerait un jour.
     private void validerId(int id) {
         if (id <= 0) {
             throw new IllegalArgumentException("L'identifiant doit être strictement positif.");
         }
-    }
-
-    // Anciennement Portefeuille.genererIdTransaction() : lire le compteur puis l'incrémenter
-    // était un traitement, pas un attribut ni un getter/setter classique. Portefeuille n'expose
-    // plus que getProchainIdTransaction()/setProchainIdTransaction(int) ; c'est ce service qui
-    // combine les deux pour distribuer l'identifiant suivant.
-    private int genererIdTransaction(Portefeuille portefeuille) {
-        int id = portefeuille.getProchainIdTransaction();
-        portefeuille.setProchainIdTransaction(id + 1);
-        return id;
     }
 
     // Anciennement Transaction.validerMontant(). Appelée à la fois pour un ajout et pour une
@@ -119,12 +114,11 @@ public class ServiceTransaction implements IServiceTransaction {
         validerCategorieCoherente(categorie, TypeTransaction.DEPENSE);
         validerDate(date);
 
-        Portefeuille portefeuille = servicePortefeuille.getDonnees();
-        int id = genererIdTransaction(portefeuille);
+        String descriptionNormalisee = normaliserDescription(description);
+        int id = servicePortefeuille.enregistrerNouvelleTransaction(montant, TypeTransaction.DEPENSE, categorie, date, descriptionNormalisee);
         validerId(id);
-        Transaction depense = new Transaction(id, montant, TypeTransaction.DEPENSE, categorie, date, normaliserDescription(description));
-        portefeuille.ajouterTransaction(depense);
-        servicePortefeuille.sauvegarder();
+        Transaction depense = new Transaction(id, montant, TypeTransaction.DEPENSE, categorie, date, descriptionNormalisee);
+        servicePortefeuille.getDonnees().ajouterTransaction(depense);
     }
 
     public void ajouterRevenu(double montant, Categorie categorie, LocalDate date, String description) {
@@ -134,12 +128,11 @@ public class ServiceTransaction implements IServiceTransaction {
         validerCategorieCoherente(categorie, TypeTransaction.REVENU);
         validerDate(date);
 
-        Portefeuille portefeuille = servicePortefeuille.getDonnees();
-        int id = genererIdTransaction(portefeuille);
+        String descriptionNormalisee = normaliserDescription(description);
+        int id = servicePortefeuille.enregistrerNouvelleTransaction(montant, TypeTransaction.REVENU, categorie, date, descriptionNormalisee);
         validerId(id);
-        Transaction revenu = new Transaction(id, montant, TypeTransaction.REVENU, categorie, date, normaliserDescription(description));
-        portefeuille.ajouterTransaction(revenu);
-        servicePortefeuille.sauvegarder();
+        Transaction revenu = new Transaction(id, montant, TypeTransaction.REVENU, categorie, date, descriptionNormalisee);
+        servicePortefeuille.getDonnees().ajouterTransaction(revenu);
     }
 
     public void modifierTransaction(int id, double nouveauMontant, Categorie nouvelleCategorie, LocalDate nouvelleDate, String nouvelleDescription) {
@@ -149,17 +142,19 @@ public class ServiceTransaction implements IServiceTransaction {
         validerCategorieCoherente(nouvelleCategorie, transaction.getType());
         validerDate(nouvelleDate);
 
+        String descriptionNormalisee = normaliserDescription(nouvelleDescription);
+        servicePortefeuille.enregistrerModificationTransaction(id, nouveauMontant, nouvelleCategorie, nouvelleDate, descriptionNormalisee);
+
         transaction.setMontant(nouveauMontant);
         transaction.setCategorie(nouvelleCategorie);
         transaction.setDate(nouvelleDate);
-        transaction.setDescription(normaliserDescription(nouvelleDescription));
-        servicePortefeuille.sauvegarder();
+        transaction.setDescription(descriptionNormalisee);
     }
 
     public void supprimerTransaction(int id) {
         Transaction transaction = trouverTransaction(id);
+        servicePortefeuille.enregistrerSuppressionTransaction(id);
         servicePortefeuille.getDonnees().retirerTransaction(transaction);
-        servicePortefeuille.sauvegarder();
     }
 
     // Recherche publique d'une transaction par id, utilisée par ControleurTransaction pour

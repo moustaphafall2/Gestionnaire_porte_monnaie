@@ -8,7 +8,6 @@ import application.dto.MouvementDTO;
 import application.dto.ObjectifDTO;
 import domain.entity.Epargne;
 import domain.entity.MouvementEpargne;
-import domain.entity.Portefeuille;
 import domain.enumeration.SensMouvement;
 import application.service.interfaces.IServiceEpargne;
 import application.service.interfaces.IServiceSolde;
@@ -40,6 +39,10 @@ import application.service.interfaces.IServiceSolde;
     * le seul de ses deux besoins qui peut passer par une interface, l'autre (détenir/sauvegarder
     * via getDonnees()) reste forcé de dépendre de la classe concrète ServicePortefeuille (voir
     * le journal de développement pour la raison technique).
+    *
+    * Depuis l'étape 6, l'identifiant d'un nouvel objectif vient de la base
+    * (servicePortefeuille.enregistrerNouvelObjectif()) : plus de compteur à combiner soi-même.
+    * Ordre systématique désormais : persister d'abord, construire ou muter la mémoire ensuite.
 */
 public class ServiceEpargne implements IServiceEpargne {
     // Les montants sont des FCFA sans centimes, mais restent des double : deux montants
@@ -153,29 +156,16 @@ public class ServiceEpargne implements IServiceEpargne {
         }
     }
 
-    // Anciennement Portefeuille.genererIdObjectif() : lire le compteur puis l'incrémenter était
-    // un traitement, pas un attribut ni un getter/setter classique. Portefeuille n'expose plus
-    // que getProchainIdObjectif()/setProchainIdObjectif(int) ; c'est ce service qui combine les
-    // deux pour distribuer l'identifiant suivant. Même principe que
-    // ServiceTransaction.genererIdTransaction().
-    private int genererIdObjectif(Portefeuille portefeuille) {
-        int id = portefeuille.getProchainIdObjectif();
-        portefeuille.setProchainIdObjectif(id + 1);
-        return id;
-    }
-
-    // Crée un nouvel objectif et l'ajoute au portefeuille. Le compteur d'identifiants reste
-    // dans Portefeuille (donc sauvegardé) : repartir de zéro au redémarrage créerait des
-    // doublons. Renvoie void : comme ajouterDepense/ajouterRevenu, la valeur créée n'était
-    // jamais lue par ControleurEpargne, la garder aurait été du code mort.
+    // Crée un nouvel objectif et l'ajoute au portefeuille. Renvoie void : comme
+    // ajouterDepense/ajouterRevenu, la valeur créée n'était jamais lue par ControleurEpargne, la
+    // garder aurait été du code mort.
     public void creerObjectif(String nom, double montantCible, LocalDate dateLimite) {
         validerNomObjectif(nom);
         validerMontantCible(montantCible);
 
-        Portefeuille portefeuille = servicePortefeuille.getDonnees();
-        Epargne objectif = new Epargne(genererIdObjectif(portefeuille), nom, montantCible, dateLimite);
-        portefeuille.ajouterObjectif(objectif);
-        servicePortefeuille.sauvegarder();
+        int id = servicePortefeuille.enregistrerNouvelObjectif(nom, montantCible, dateLimite);
+        Epargne objectif = new Epargne(id, nom, montantCible, dateLimite);
+        servicePortefeuille.getDonnees().ajouterObjectif(objectif);
     }
 
     // Anciennement MouvementEpargne.validerMontant(). Appelée à la fois par contribuerObjectif()
@@ -224,8 +214,8 @@ public class ServiceEpargne implements IServiceEpargne {
         }
 
         Epargne objectif = trouverObjectif(idObjectif);
+        servicePortefeuille.enregistrerNouveauMouvement(idObjectif, montant, SensMouvement.CONTRIBUTION, date);
         objectif.ajouterMouvement(new MouvementEpargne(montant, SensMouvement.CONTRIBUTION, date));
-        servicePortefeuille.sauvegarder();
     }
 
     // Le retrait est refusé si le montant demandé dépasse ce qui est réellement épargné : ce
@@ -241,21 +231,20 @@ public class ServiceEpargne implements IServiceEpargne {
             throw new IllegalStateException("Le montant du retrait ne peut pas dépasser le montant actuellement épargné.");
         }
 
+        servicePortefeuille.enregistrerNouveauMouvement(idObjectif, montant, SensMouvement.RETRAIT, date);
         objectif.ajouterMouvement(new MouvementEpargne(montant, SensMouvement.RETRAIT, date));
-        servicePortefeuille.sauvegarder();
     }
 
     // Un objectif ne peut être supprimé que s'il est vide : l'utilisateur doit d'abord décider
     // de la destination des sommes qui y étaient placées. Refusé à cause de l'état de l'objectif
     // (pas d'une donnée invalide) : IllegalStateException.
     public void supprimerObjectif(int idObjectif) {
-        Portefeuille portefeuille = servicePortefeuille.getDonnees();
         Epargne objectif = trouverObjectif(idObjectif);
         if (!estVide(objectif)) {
             throw new IllegalStateException("L'objectif n'est pas vide (" + getMontantActuel(objectif)
                     + " FCFA restants), retirez d'abord les sommes épargnées.");
         }
-        portefeuille.retirerObjectif(objectif);
-        servicePortefeuille.sauvegarder();
+        servicePortefeuille.enregistrerSuppressionObjectif(idObjectif);
+        servicePortefeuille.getDonnees().retirerObjectif(objectif);
     }
 }

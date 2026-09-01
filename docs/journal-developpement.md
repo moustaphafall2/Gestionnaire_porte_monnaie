@@ -2897,11 +2897,395 @@ machine.
 
 ### Reste à faire
 
-**Étape en cours, arrêtée volontairement après cette sous-étape** : l'étudiant doit d'abord
-lancer les conteneurs, créer le schéma, et valider la connexion (`TesterConnexion`) avant que le
-vrai `PortefeuilleRepository` ne soit écrit. Sous-étape suivante (2/3) : l'implémentation JDBC de
-`PortefeuilleRepository`, méthode par méthode, en commençant par `charger()` ; adaptation de
-`Portefeuille` (retrait des compteurs), `ServicePortefeuille`, `IServicePortefeuille`,
-`ServiceTransaction`, `ServiceEpargne`, `ServiceCategorie`, `Main`. Sous-étape (3/3), en tout
-dernier et seulement une fois les sept écrans validés avec la base : suppression de
-`GestionnaireFichier`, `lib/gson-2.13.1.jar`, `portefeuille.json`, `TesterConnexion.java`.
+Sous-étape (2/3) : l'implémentation JDBC de `PortefeuilleRepository`, méthode par méthode ;
+adaptation de `Portefeuille` (retrait des compteurs), `ServicePortefeuille`,
+`IServicePortefeuille`, `ServiceTransaction`, `ServiceEpargne`, `ServiceCategorie`, `Main`.
+Sous-étape (3/3), en tout dernier et seulement une fois les sept écrans validés avec la base :
+suppression de `GestionnaireFichier`, `lib/gson-2.13.1.jar`, `portefeuille.json`,
+`TesterConnexion.java`, `TesterChargement.java`.
+
+## 2026-08-31 — Étape 6 (2/3, partielle) : `GestionnairePostgreSQL.charger()`
+
+### Correction sur place, avant de coder
+
+Un point de l'analyse validée s'est révélé faux en écrivant `charger()` : `MouvementEpargne`
+n'a en réalité pas besoin de gagner un identifiant côté Java. La table `mouvement_epargne` a
+besoin d'une clé primaire technique (toute table en a besoin), mais rien dans le domaine ne
+cible jamais un mouvement individuel par identifiant — on en ajoute, on n'en modifie ni n'en
+supprime un précis (seule la suppression de l'objectif entier, via `ON DELETE CASCADE`, retire
+des mouvements, jamais un `id` de mouvement choisi). `charger()` lit la colonne `id` de
+`mouvement_epargne` pour rien de plus que satisfaire SQL (elle n'est même pas sélectionnée dans
+la requête), et construit `MouvementEpargne` avec son constructeur actuel, inchangé. Corrigé ici
+plutôt qu'appliqué silencieusement, puisque l'ajout de cet identifiant avait été présenté comme
+acquis dans l'analyse validée.
+
+### Ce qui a été écrit
+
+- **`GestionnairePostgreSQL`** (nouvelle classe, `infrastructure.persistence`), implémentation de
+  `PortefeuilleRepository` : seule `charger()` a un corps réel, qui reconstruit le `Portefeuille`
+  en trois temps (catégories actives, transactions, objectifs avec leurs mouvements), chacun via
+  sa propre méthode privée et sa propre connexion refermée par `try-with-resources`.
+  `sauvegarder(Portefeuille)` lève délibérément `UnsupportedOperationException` : elle n'est pas
+  encore branchée dans `Main` (qui utilise toujours `GestionnaireFichier`), donc jamais appelée
+  en pratique — un corps temporaire explicite plutôt qu'un silence qui ferait croire que
+  l'écriture fonctionne déjà.
+- **`TesterChargement`** (hors architecture, comme `TesterConnexion`) : charge le portefeuille
+  depuis la base et affiche le nombre de transactions, catégories actives et objectifs — de quoi
+  vérifier à l'œil qu'une base vide donne bien trois zéros, sans exception.
+- **Aucun autre fichier touché** : `PortefeuilleRepository` (l'interface) n'a pas changé —
+  `charger()` avait déjà exactement la même signature qu'aujourd'hui, seule `sauvegarder(Portefeuille)`
+  changera à la sous-étape suivante. `GestionnaireFichier`, `Portefeuille`, `ServicePortefeuille`
+  et tous les services restent intacts et pleinement fonctionnels avec le JSON, comme demandé.
+
+### Choix de conception
+
+**Pourquoi `sauvegarder(Portefeuille)` lève une exception plutôt que d'être laissée vide ou de
+ne rien faire.** Une méthode vide aurait compilé silencieusement et donné l'illusion qu'écrire
+fonctionne déjà si quelqu'un l'appelait par erreur avant la sous-étape suivante — pire qu'une
+erreur explicite. `UnsupportedOperationException` avec un message qui explique pourquoi et ce
+qui va la remplacer se comporte comme un aiguillage : impossible de l'appeler sans comprendre
+immédiatement que ce n'est pas fini.
+
+**Pourquoi trois méthodes privées plutôt qu'une seule grande `charger()`.** Chacune correspond à
+une table, se lit et se teste mentalement indépendamment des deux autres — même principe déjà
+suivi dans `ServiceTransaction`/`ServiceEpargne` (une méthode privée par validation, par
+recherche...), appliqué ici à la lecture SQL.
+
+### Points à savoir défendre
+
+- **Pourquoi `PreparedStatement` même pour `SELECT categorie FROM categorie_active`, une requête
+  sans le moindre paramètre ?** Parce que la règle du projet est "systématiquement", pas "quand
+  c'est nécessaire" : une règle sans exception se vérifie d'un coup d'œil sur n'importe quelle
+  méthode, une règle à cas particuliers demande un jugement à chaque nouvelle requête — même
+  raisonnement déjà retenu dans ce journal pour d'autres règles absolues du projet.
+  `PreparedStatement` sans paramètre se comporte simplement comme une requête statique.
+- **Que se passerait-il si `date_limite` était lue comme les autres dates, sans vérifier `null`
+  d'abord ?** `NullPointerException` sur `.toLocalDate()` dès qu'un objectif n'a pas de date
+  limite (le cas normal, cette date est facultative) — la seule date du schéma qui a besoin de ce
+  garde-fou, les autres (`date_transaction`, `date_mouvement`) sont `NOT NULL`.
+
+### Pièges rencontrés
+
+Aucun sur le code final. Un aller-retour de conception noté ci-dessus (l'identifiant de
+`MouvementEpargne`), corrigé avant d'écrire quoi que ce soit qui en dépendait.
+
+### Reste à faire
+
+`charger()` validé par l'étudiant (base vide → trois zéros, via `TesterChargement`). Sous-étape
+suivante : catégories (voir entrée suivante).
+
+## 2026-08-31 — Étape 6 (2/3, suite) : `activerCategorie()`/`desactiverCategorie()`, et une précision sur l'ordre de travail
+
+### Précision sur l'ordre de travail, avant de coder
+
+En préparant les méthodes d'écriture des catégories, un problème d'enchaînement est apparu :
+brancher `activerCategorie()`/`desactiverCategorie()` sur `ServiceCategorie` et sur `Main`
+immédiatement casserait les écrans transactions et épargne. Ces deux écrans appellent encore
+`servicePortefeuille.sauvegarder()` (la méthode générique, pas encore remplacée pour eux) ; si
+`Main` était rebranché sur `GestionnairePostgreSQL` dès maintenant,
+`GestionnairePostgreSQL.sauvegarder(Portefeuille)` — qui lève délibérément
+`UnsupportedOperationException` tant qu'elle n'est pas réécrite — serait appelée à la première
+dépense ou au premier objectif créé.
+
+**Décision, présentée et acceptée avant de coder** : chaque méthode du repository est écrite et
+vérifiée directement contre la base (comme `charger()` via `TesterChargement`), sans toucher à
+`Main` ni aux services, jusqu'à ce que les huit méthodes existent. Le branchement complet
+(`Portefeuille`, `ServicePortefeuille`, `IServicePortefeuille`, les trois services mutateurs,
+`Main`) se fait en une seule fois, à la toute fin de la sous-étape (2/3) — un seul basculement
+cohérent, jamais un état intermédiaire où une partie de l'application tourne sur la base et
+l'autre sur le JSON.
+
+### Ce qui a été écrit
+
+- **`PortefeuilleRepository`** : deux méthodes de plus, `activerCategorie(Categorie)` et
+  `desactiverCategorie(Categorie)`. `sauvegarder(Portefeuille)` reste dans l'interface pour
+  l'instant — encore nécessaire à `GestionnaireFichier` et à ce que `ServiceTransaction`/
+  `ServiceEpargne` continuent d'appeler sans changement.
+- **`GestionnairePostgreSQL`** : les deux méthodes, pour de vrai. `activerCategorie()` fait un
+  `INSERT ... ON CONFLICT DO NOTHING` (idempotent, comme `Set.add()` — activer une catégorie déjà
+  active ne doit pas échouer). `desactiverCategorie()` fait un `DELETE ... WHERE categorie = ?`
+  (idempotent aussi : supprimer une ligne absente ne fait simplement rien, comme `Set.remove()`).
+  Les deux traduisent `SQLException` en `ErreurSauvegardeException`.
+- **`GestionnaireFichier`** : les deux mêmes méthodes, implémentées pour de vrai (pas un simple
+  "à faire") — recharge le fichier entier, applique la mutation sur l'objet obtenu, réécrit tout.
+  Le même travail que faisait déjà `sauvegarder(Portefeuille)` avant cette étape, uniquement
+  déclenché par un appel plus précis désormais. Nécessaire pour que `GestionnaireFichier` reste
+  pleinement fonctionnel, comme demandé — pas seulement compilable.
+- **`TesterCategories`** (hors architecture, comme les deux précédents) : active/désactive deux
+  catégories dans un ordre qui exerce les deux cas idempotents, avec un message avant chaque
+  étape indiquant quoi vérifier dans pgAdmin.
+
+### Choix de conception
+
+**Pourquoi `ON CONFLICT DO NOTHING` plutôt que vérifier d'abord si la catégorie est déjà
+active.** Une vérification préalable (`SELECT ... puis INSERT si absent`) demanderait deux
+allers-retours à la base et resterait vulnérable à une situation où la ligne apparaîtrait entre
+les deux (non pertinent ici, application mono-utilisateur, mais sans aucun bénéfice à s'en
+priver) ; `ON CONFLICT DO NOTHING` fait la vérification et l'insertion en une seule instruction
+SQL, atomique, exactement le même effet que `Set.add()` sur une valeur déjà présente.
+
+**Pourquoi `GestionnaireFichier` reçoit une vraie implémentation plutôt qu'un
+`UnsupportedOperationException` comme `GestionnairePostgreSQL.sauvegarder()`.** Les deux corps
+temporaires n'ont pas le même statut : `GestionnairePostgreSQL.sauvegarder()` n'est appelée par
+personne (rien n'y est branché) et le restera tant que la migration n'est pas terminée — la
+lever bruyamment évite un faux sentiment que l'écriture fonctionne. `GestionnaireFichier`, lui,
+reste la persistance réellement utilisée par l'application pendant toute la durée de la
+migration : lui laisser un corps qui échoue casserait l'application aujourd'hui, pas seulement
+plus tard. Une méthode "pas encore prête" et une méthode "temporaire mais fonctionnelle" ne se
+traitent pas de la même façon, même si les deux disparaîtront à terme.
+
+### Points à savoir défendre
+
+- **Pourquoi `sauvegarder(Portefeuille)` reste-t-elle dans `PortefeuilleRepository` alors que
+  l'étape 6 doit la remplacer ?** Elle est en cours de remplacement, pas encore remplacée : tant
+  que les méthodes granulaires pour les transactions et l'épargne n'existent pas,
+  `ServiceTransaction`/`ServiceEpargne` en ont toujours besoin. Elle disparaîtra de l'interface
+  une fois que plus aucune méthode métier ne l'appelle — pas avant.
+- **Le comportement de l'application a-t-il changé pour l'utilisateur ?** Non : `Main` utilise
+  toujours `GestionnaireFichier`, `activerCategorie`/`desactiverCategorie` de
+  `GestionnaireFichier` produisent exactement le même résultat qu'avant cette étape (tout le
+  fichier réécrit), seul le point d'entrée dans le code a changé.
+
+### Pièges rencontrés
+
+Aucun sur le code. L'enchaînement décrit en tête d'entrée (repéré avant d'écrire quoi que ce
+soit qui aurait cassé l'application) est le seul point notable de cette sous-étape.
+
+### Reste à faire
+
+`activerCategorie()`/`desactiverCategorie()` validées par l'étudiant (`TesterCategories`, vérifié
+dans pgAdmin). Sous-étape suivante : transactions (voir entrée suivante).
+
+## 2026-09-01 — Étape 6 (2/3, suite) : `ajouterTransaction()`/`modifierTransaction()`/`supprimerTransaction()`
+
+### Ce qui a été écrit
+
+- **`PortefeuilleRepository`** : trois méthodes de plus. `ajouterTransaction(...)` renvoie
+  l'identifiant généré par la base (`int`), contrairement à `activerCategorie`/`desactiverCategorie`
+  qui ne renvoient rien — c'est la première méthode du repository qui a besoin de faire
+  remonter une donnée créée par la base vers l'appelant.
+- **`GestionnairePostgreSQL`** : `ajouterTransaction` fait un `INSERT ... RETURNING id`, qui
+  renvoie l'identifiant généré par la colonne `SERIAL` dans le même aller-retour que l'insertion
+  — préféré à `getGeneratedKeys()` (l'API JDBC générique, pensée pour rester portable entre
+  bases de données différentes, ce qui n'est pas un objectif ici). `modifierTransaction` fait un
+  `UPDATE ... WHERE id = ?`, `supprimerTransaction` un `DELETE ... WHERE id = ?` — chacune une
+  seule instruction, sans recharger quoi que ce soit avant.
+- **`GestionnaireFichier`** : les trois mêmes méthodes, implémentées pour de vrai, même principe
+  que pour les catégories (recharger le fichier, muter, réécrire). `ajouterTransaction` y
+  reprend la logique de compteur (`getProchainIdTransaction`/`setProchainIdTransaction`) que
+  `ServiceTransaction.genererIdTransaction()` portait jusqu'ici : le compteur reste nécessaire
+  tant que `GestionnaireFichier` existe, il ne disparaîtra qu'avec elle au branchement final.
+  Une méthode privée `trouverTransaction(Portefeuille, int)` ajoutée pour `modifierTransaction`/
+  `supprimerTransaction` : chercher l'objet réel dans la liste rechargée avant de le modifier ou
+  de le retirer (`Portefeuille.retirerTransaction` compare par référence, une transaction
+  reconstruite à la main ne correspondrait à rien dans la liste).
+- **`TesterTransactions`** (hors architecture, comme les précédents) : ajoute une transaction,
+  la modifie, la supprime, avec un message avant chaque étape indiquant quoi vérifier dans
+  pgAdmin.
+
+### Choix de conception
+
+**Pourquoi `RETURNING id` plutôt que `getGeneratedKeys()`.** Les deux fonctionnent avec
+PostgreSQL. `getGeneratedKeys()` existe pour rester écrit une seule fois si la base change un
+jour ; ce projet cible PostgreSQL explicitement (contrainte du `CLAUDE.md`), et `RETURNING`
+s'écrit et se lit en une seule instruction SQL visible, plus proche de l'objectif "je veux voir
+le SQL et pouvoir l'expliquer" que l'API générique.
+
+**Pourquoi `trouverTransaction` est dupliquée entre `GestionnaireFichier` et
+`ServiceTransaction` (qui a sa propre méthode du même nom) plutôt que partagée.** Les deux
+cherchent dans des listes différentes, obtenues différemment (l'une recharge le fichier à
+chaque appel, l'autre lit la liste déjà en mémoire du service) : les fusionner aurait demandé de
+faire dépendre `GestionnaireFichier` de `ServiceTransaction` ou l'inverse, une dépendance qui
+n'a pas de sens entre une classe de persistance et un service, pour une méthode de dix lignes
+vouée à disparaître avec `GestionnaireFichier`.
+
+### Points à savoir défendre
+
+- **Pourquoi `ajouterTransaction` renvoie un `int` et pas les deux méthodes des catégories ?**
+  Activer/désactiver une catégorie ne crée rien de nouveau à identifier ; ajouter une transaction
+  si. C'est la différence entre une mutation d'ensemble (présence/absence) et une création
+  d'entité avec identité propre.
+- **Le compteur `prochainIdTransaction` de `Portefeuille` existe-t-il encore ?** Oui, encore
+  utilisé par `GestionnaireFichier.ajouterTransaction()` et par
+  `ServiceTransaction.genererIdTransaction()` (pas encore touchée). Il disparaîtra au branchement
+  final, une fois `GestionnaireFichier` elle-même supprimée — jusque-là, le retirer casserait la
+  persistance JSON encore active.
+
+### Pièges rencontrés
+
+Aucun — compilation propre.
+
+### Reste à faire
+
+`ajouterTransaction()`/`modifierTransaction()`/`supprimerTransaction()` validées (`TesterTransactions`,
+vérifié dans pgAdmin). Sous-étape suivante : épargne et mouvements (voir entrée suivante).
+
+## 2026-09-01 — Étape 6 (2/3, fin) : `ajouterObjectif()`/`ajouterMouvement()`/`supprimerObjectif()`
+
+Dernière méthode du repository à écrire avant le branchement final unique.
+
+### Ce qui a été écrit
+
+- **`PortefeuilleRepository`** : trois méthodes de plus, dernier ajout avant que
+  `sauvegarder(Portefeuille)` ne devienne inutile.
+- **`GestionnairePostgreSQL`** : `ajouterObjectif` fait un `INSERT ... RETURNING id`, même
+  patron que `ajouterTransaction`. `date_limite` étant facultative, `dateLimite == null` est
+  traitée par `setNull(3, Types.DATE)` plutôt que `setDate(3, null)`, qui lèverait une
+  `NullPointerException` — le pilote a besoin de connaître explicitement le type SQL d'une
+  valeur absente, une simple valeur Java `null` ne suffit pas. `ajouterMouvement` insère sans
+  jamais lire l'identifiant généré (voir la sous-étape `charger()` : aucune règle du domaine ne
+  cible un mouvement par id). `supprimerObjectif` est une seule instruction `DELETE FROM epargne` :
+  `ON DELETE CASCADE` (posé dans `sql/schema.sql`) fait disparaître les mouvements de l'objectif
+  avec lui, sans requête supplémentaire à écrire.
+- **`GestionnaireFichier`** : les trois mêmes méthodes, même principe que pour les transactions
+  (compteur `prochainIdObjectif` repris temporairement, méthode privée `trouverObjectif`
+  symétrique de `trouverTransaction`).
+- **`TesterEpargne`** (hors architecture, comme les précédents) : crée un objectif sans date
+  limite, y ajoute une contribution puis un retrait, supprime l'objectif — avec un message avant
+  chaque étape, dont un rappel explicite de vérifier que la suppression entraîne bien celle des
+  deux mouvements (`ON DELETE CASCADE`, pas seulement la ligne `epargne`).
+
+### Choix de conception
+
+**Pourquoi `setNull(3, Types.DATE)` plutôt que de laisser `setDate` recevoir `null`.** Vérifié
+avant d'écrire le code : `PreparedStatement.setDate(int, Date)` avec un second argument `null`
+lève une `NullPointerException` au lieu d'insérer un `NULL` SQL — contre-intuitif, mais
+documenté. `setNull` existe précisément pour ce cas : donner au pilote le type SQL de la colonne
+sans valeur Java à convertir. Seule date facultative du schéma, donc seul endroit du code où
+cette distinction se pose.
+
+### Points à savoir défendre
+
+- **Pourquoi vérifier "les mouvements ont disparu" en plus de "l'objectif a disparu" dans
+  `TesterEpargne`, alors qu'une seule instruction SQL a été exécutée ?** Parce que
+  `ON DELETE CASCADE` est un comportement de la base, pas du code Java : rien dans
+  `supprimerObjectif()` ne le prouve à la lecture, seule une vérification dans pgAdmin confirme
+  que la contrainte du schéma fait bien ce qu'elle annonce.
+- **`ajouterMouvement` a-t-elle besoin d'un identifiant d'objectif valide avant d'insérer ?** Pas
+  vérifié ici : la contrainte `REFERENCES epargne(id)` du schéma refuserait l'insertion avec une
+  erreur SQL si `idObjectif` n'existait pas — mais en pratique, comme pour les transactions,
+  cette méthode n'est jamais appelée avec un id qui n'a pas déjà été validé par le service
+  (l'objectif existe forcément en mémoire avant que `ServiceEpargne` ne déclenche l'écriture).
+
+### Pièges rencontrés
+
+Aucun — compilation propre.
+
+### Reste à faire
+
+Les huit méthodes du repository sont écrites et testées individuellement. Branchement final
+effectué (voir entrée suivante).
+
+## 2026-09-01 — Étape 6 (2/3, branchement final) : `Main` bascule sur PostgreSQL
+
+### Deux corrections à ce qui avait été annoncé, avant de coder
+
+**1. Les compteurs de `Portefeuille` ne sont pas retirés maintenant.** Annoncé comme faisant
+partie du "branchement final" dans les entrées précédentes ; en préparant le code, il est apparu
+que `GestionnaireFichier.ajouterTransaction()`/`ajouterObjectif()` (écrits à la sous-étape
+précédente pour qu'elle reste fonctionnelle) dépendent justement de ces compteurs. Les retirer
+maintenant aurait cassé la compilation de `GestionnaireFichier` — contraire à la consigne de la
+garder pleinement fonctionnelle tant que la base n'est pas validée sur les sept écrans.
+`Portefeuille` n'a donc pas été modifiée du tout à cette sous-étape ; les compteurs partiront à
+la sous-étape (3/3), en même temps que `GestionnaireFichier`.
+
+**2. La boucle de reprise après échec de sauvegarde disparaît de `Main`.** Décision prise avec
+l'étudiant avant de coder, après avoir identifié une contrainte technique : l'id d'une nouvelle
+transaction ou d'un nouvel objectif vient désormais de la base (`RETURNING id`), donc il faut
+persister *avant* de construire l'objet en mémoire — l'ordre inverse d'aujourd'hui. Conséquence :
+si la persistance échoue, rien n'a été appliqué nulle part, ni en base ni en mémoire. La boucle
+"voulez-vous réessayer la sauvegarde ?" n'a plus de sens : elle existait uniquement parce que le
+JSON obligeait à muter la mémoire avant d'écrire, ce qui pouvait laisser un écart entre les deux
+en cas d'échec. En persistant d'abord, cet écart ne peut plus exister — la boucle disparaît parce
+que le problème qu'elle rattrapait disparaît, pas pour gagner du temps.
+
+### Ce qui a été écrit
+
+- **`ServicePortefeuille`** : les huit méthodes `enregistrerXxx()`, un simple relais vers
+  `PortefeuilleRepository` chacune (aucune ne mute `Portefeuille`). `sauvegarder()` a disparu.
+- **`IServicePortefeuille`** : vidée de son unique méthode. Plus aucun code n'en dépend
+  activement (vérifié par `grep` : les seules occurrences restantes sont `ServicePortefeuille
+  implements IServicePortefeuille` et deux mentions dans des commentaires). **Signalée, pas
+  supprimée** — décision laissée à l'étudiant, comme demandé.
+- **`ServiceTransaction`, `ServiceEpargne`, `ServiceCategorie`** : chaque méthode qui modifiait
+  des données applique désormais l'ordre persister-puis-muter : appel à la méthode
+  `enregistrerXxx()` de `ServicePortefeuille` d'abord, puis construction ou mutation de l'objet
+  en mémoire (`servicePortefeuille.getDonnees().ajouterTransaction(...)`, etc.). `genererIdTransaction()`
+  et `genererIdObjectif()` supprimées (l'id vient de la base). `import domain.entity.Portefeuille`
+  retiré de `ServiceTransaction`/`ServiceEpargne` : plus aucune méthode n'y déclare de variable
+  de ce type, tout passe par `servicePortefeuille.getDonnees()` en ligne.
+- **`Main`** : construit `GestionnairePostgreSQL` à la place de `GestionnaireFichier`. Le bloc
+  `catch (ErreurSauvegardeException erreur)` affiche l'erreur et reprend la boucle du menu, sans
+  boucle de reprise. `confirmerNouvelleSauvegarde()` supprimée.
+
+### Ce qui devient inutilisé — signalé, pas supprimé
+
+`VueConsole.demanderNouvelleTentativeSauvegarde()`, `afficherSauvegardeReussie()` et
+`afficherSauvegardeAbandonnee()` n'ont plus aucun appelant (vérifié par `grep` : seul `Main` les
+appelait). Laissées en place plutôt que supprimées : si un retour à `GestionnaireFichier`
+s'avérait nécessaire avant la fin de la migration, l'ancien comportement resterait récupérable
+sans les réécrire.
+
+### Choix de conception
+
+**Pourquoi les méthodes `enregistrerXxx()` de `ServicePortefeuille` ne mutent jamais
+`Portefeuille` elles-mêmes.** Elles ne sont qu'un relais vers la persistance ; la mutation de la
+structure en mémoire reste la responsabilité du service appelant, via `getDonnees()`, exactement
+comme avant cette étape. Mélanger les deux dans une seule méthode aurait rendu l'ordre
+persister-puis-muter invisible à la lecture — en les séparant, chaque appelant écrit
+explicitement les deux étapes, dans cet ordre, ligne par ligne.
+
+**Pourquoi ne pas avoir profité de l'occasion pour supprimer `IServicePortefeuille` et les trois
+méthodes de `VueConsole` tout de suite, comme `estAtteint()` à l'étape 5.** Différence
+importante avec `estAtteint()` : cette méthode-là était morte de façon définitive (aucune
+dépendance restante nulle part, aucune raison de la garder). Ici, la mort de ces méthodes est une
+conséquence directe et récente d'une décision (abandon de la boucle de reprise) qui reste
+elle-même sous la responsabilité de l'étudiant à valider — et surtout, `GestionnaireFichier` reste
+en place comme filet de sécurité explicite. Supprimer ce qui la sert encore conceptuellement
+(même si `Main` ne les appelle plus) irait à l'encontre de la raison même pour laquelle
+`GestionnaireFichier` a été conservée.
+
+### Points à savoir défendre
+
+- **L'application se comporte-t-elle différemment pour l'utilisateur en cas d'échec
+  d'écriture ?** Oui, un changement réel : avant, l'échec laissait une chance de réessayer sans
+  perdre la saisie ; maintenant, l'échec signifie que rien n'a eu lieu et l'utilisateur doit
+  recommencer l'action depuis le menu. Assumé : conséquence directe et documentée de l'ordre
+  persister-puis-muter, pas un oubli.
+- **Pourquoi l'ordre des opérations a-t-il changé dans `ajouterDepense()` (et les sept autres
+  méthodes similaires) ?** Parce que l'identifiant vient maintenant de la base et n'est plus
+  disponible avant l'écriture — l'entité ne peut être construite qu'après avoir persisté, alors
+  qu'avant cette étape elle l'était avant.
+
+### Pièges rencontrés
+
+Aucun sur le code final. Les deux corrections documentées en tête de cette entrée ont été
+repérées avant d'écrire quoi que ce soit qui en aurait dépendu.
+
+### Reste à faire
+
+Les sept écrans testés avec PostgreSQL par l'étudiant, y compris les cas d'erreur. Sous-étape
+(3/3) : voir entrée suivante.
+
+## 2026-09-01 — Précision : pourquoi la boucle de reprise disparaît
+
+Reformulation demandée par l'étudiant, pour que la raison soit consignée dans ses propres
+termes, plus nette que celle de l'entrée précédente : **la boucle de reprise après échec de
+sauvegarde n'existait que parce que le stockage en fichier obligeait à muter la mémoire avant
+d'écrire.** C'est cet ordre-là qui pouvait laisser un écart entre les deux si l'écriture
+échouait — la mémoire en avance sur le disque, d'où la question "voulez-vous réessayer ?" pour
+tenter de refermer cet écart. **En persistant d'abord, un échec ne laisse plus d'écart entre les
+deux : le problème disparaît, la solution avec.** Ce n'est pas une simplification pour gagner du
+temps, c'est la disparition de la situation même que cette boucle existait pour rattraper.
+
+### Décisions actées pour la sous-étape (3/3), pas encore exécutées
+
+Deux points laissés en suspens aux sous-étapes précédentes ("signalé, pas supprimé") sont
+tranchés : `IServicePortefeuille` (vide, sans appelant) et les trois méthodes de `VueConsole`
+(`demanderNouvelleTentativeSauvegarde`, `afficherSauvegardeReussie`, `afficherSauvegardeAbandonnee`,
+sans appelant depuis la disparition de la boucle de reprise) seront supprimées. **Condition
+explicite posée par l'étudiant avant toute suppression** : les sept écrans doivent être testés
+avec PostgreSQL et validés — la confirmation doit venir de lui, pas être déduite. Rien n'est
+supprimé tant que cette confirmation explicite n'a pas été donnée, y compris `GestionnaireFichier`,
+`lib/gson-2.13.1.jar` et `portefeuille.json`, déjà soumis à la même condition depuis le début de
+l'étape 6.

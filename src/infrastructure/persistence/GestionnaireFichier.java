@@ -19,7 +19,13 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 
+import domain.entity.Epargne;
+import domain.entity.MouvementEpargne;
 import domain.entity.Portefeuille;
+import domain.entity.Transaction;
+import domain.enumeration.Categorie;
+import domain.enumeration.SensMouvement;
+import domain.enumeration.TypeTransaction;
 import exception.ErreurChargementException;
 import exception.ErreurSauvegardeException;
 
@@ -107,6 +113,103 @@ public class GestionnaireFichier implements PortefeuilleRepository {
 
     private boolean fichierExiste() {
         return Files.exists(Paths.get(cheminFichier));
+    }
+
+    // GestionnaireFichier ne détient aucun Portefeuille entre deux appels (contrairement à
+    // ServicePortefeuille) : chaque méthode granulaire recharge le fichier, applique la
+    // mutation, puis réécrit tout — le même travail que faisait déjà sauvegarder(Portefeuille)
+    // avant l'étape 6, simplement déclenché par un appel plus précis. Ce n'est pas la version
+    // définitive de PortefeuilleRepository (elle vit dans GestionnairePostgreSQL, une écriture
+    // ciblée par l'instruction SQL) : GestionnaireFichier n'a pas besoin de mieux, il sera
+    // supprimé une fois la migration terminée.
+    public void activerCategorie(Categorie categorie) {
+        Portefeuille portefeuille = charger();
+        portefeuille.activerCategorie(categorie);
+        sauvegarder(portefeuille);
+    }
+
+    public void desactiverCategorie(Categorie categorie) {
+        Portefeuille portefeuille = charger();
+        portefeuille.desactiverCategorie(categorie);
+        sauvegarder(portefeuille);
+    }
+
+    // L'identifiant vient désormais du repository, plus d'un compteur lu par le service : ici,
+    // c'est encore le compteur de Portefeuille (prochainIdTransaction) qui le fournit, puisque
+    // GestionnaireFichier n'a pas de SERIAL pour le faire à sa place. Ce compteur disparaîtra de
+    // Portefeuille au branchement final, une fois GestionnaireFichier lui-même supprimé.
+    public int ajouterTransaction(double montant, TypeTransaction type, Categorie categorie, LocalDate date, String description) {
+        Portefeuille portefeuille = charger();
+        int id = portefeuille.getProchainIdTransaction();
+        portefeuille.setProchainIdTransaction(id + 1);
+        portefeuille.ajouterTransaction(new Transaction(id, montant, type, categorie, date, description));
+        sauvegarder(portefeuille);
+        return id;
+    }
+
+    public void modifierTransaction(int id, double montant, Categorie categorie, LocalDate date, String description) {
+        Portefeuille portefeuille = charger();
+        Transaction transaction = trouverTransaction(portefeuille, id);
+        transaction.setMontant(montant);
+        transaction.setCategorie(categorie);
+        transaction.setDate(date);
+        transaction.setDescription(description);
+        sauvegarder(portefeuille);
+    }
+
+    public void supprimerTransaction(int id) {
+        Portefeuille portefeuille = charger();
+        Transaction transaction = trouverTransaction(portefeuille, id);
+        portefeuille.retirerTransaction(transaction);
+        sauvegarder(portefeuille);
+    }
+
+    // Ne devrait jamais déclencher son cas d'erreur en usage normal : le fichier reste
+    // synchronisé avec la mémoire de ServicePortefeuille, puisque toute mutation passe par une
+    // méthode de cette classe. Gardée quand même : chercher un objet par id dans une liste sans
+    // vérifier qu'il existe serait une confiance aveugle, contraire à la règle du projet.
+    private Transaction trouverTransaction(Portefeuille portefeuille, int id) {
+        for (Transaction transaction : portefeuille.getTransactions()) {
+            if (transaction.getId() == id) {
+                return transaction;
+            }
+        }
+        throw new ErreurSauvegardeException("Aucune transaction avec l'identifiant " + id + " dans le fichier de sauvegarde.", null);
+    }
+
+    // Même principe que ajouterTransaction() : le compteur d'objectifs de Portefeuille fournit
+    // l'identifiant, en attendant la suppression de GestionnaireFichier.
+    public int ajouterObjectif(String nom, double montantCible, LocalDate dateLimite) {
+        Portefeuille portefeuille = charger();
+        int id = portefeuille.getProchainIdObjectif();
+        portefeuille.setProchainIdObjectif(id + 1);
+        portefeuille.ajouterObjectif(new Epargne(id, nom, montantCible, dateLimite));
+        sauvegarder(portefeuille);
+        return id;
+    }
+
+    public void ajouterMouvement(int idObjectif, double montant, SensMouvement sens, LocalDate date) {
+        Portefeuille portefeuille = charger();
+        Epargne objectif = trouverObjectif(portefeuille, idObjectif);
+        objectif.ajouterMouvement(new MouvementEpargne(montant, sens, date));
+        sauvegarder(portefeuille);
+    }
+
+    public void supprimerObjectif(int id) {
+        Portefeuille portefeuille = charger();
+        Epargne objectif = trouverObjectif(portefeuille, id);
+        portefeuille.retirerObjectif(objectif);
+        sauvegarder(portefeuille);
+    }
+
+    // Même principe et même remarque que trouverTransaction() ci-dessus.
+    private Epargne trouverObjectif(Portefeuille portefeuille, int id) {
+        for (Epargne objectif : portefeuille.getObjectifs()) {
+            if (objectif.getId() == id) {
+                return objectif;
+            }
+        }
+        throw new ErreurSauvegardeException("Aucun objectif avec l'identifiant " + id + " dans le fichier de sauvegarde.", null);
     }
 
     // Gson contourne le constructeur à la désérialisation (il remplit les champs directement) :
