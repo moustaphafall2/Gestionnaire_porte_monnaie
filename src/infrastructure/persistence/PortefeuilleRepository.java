@@ -10,17 +10,14 @@ import domain.enumeration.TypeTransaction;
 /*
     * PortefeuilleRepository est le seul contrat que la couche application connaît de la
     * persistance : charger un portefeuille, le faire évoluer. ServicePortefeuille ne dépend que
-    * de cette interface, jamais de GestionnaireFichier/GestionnairePostgreSQL ni de la façon
-    * dont les données sont réellement stockées.
+    * de cette interface, jamais de GestionnairePostgreSQL ni de la façon dont les données sont
+    * réellement stockées.
     *
-    * sauvegarder(Portefeuille) est en cours de remplacement (étape 6) par des méthodes
-    * granulaires, une par mutation, pour ne plus jamais réécrire l'intégralité des données à
-    * chaque opération : catégories, transactions et épargne sont faites. sauvegarder(Portefeuille)
-    * disparaîtra au branchement final, une fois qu'il n'y aura plus rien à réécrire en bloc.
+    * Pas de sauvegarder(Portefeuille) qui réécrirait l'intégralité des données à chaque
+    * opération : une méthode granulaire par mutation, pour catégories, transactions et épargne.
 */
 public interface PortefeuilleRepository {
     public Portefeuille charger();
-    public void sauvegarder(Portefeuille portefeuille);
 
     public void activerCategorie(Categorie categorie);
     public void desactiverCategorie(Categorie categorie);

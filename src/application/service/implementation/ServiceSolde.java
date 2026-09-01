@@ -16,12 +16,15 @@ import application.service.interfaces.IServiceSolde;
     *
     * Comme ServiceStatistique, il ne modifie jamais Portefeuille : aucun appel à sauvegarder().
     *
-    * Il dépend de ServicePortefeuille (la classe concrète, pas l'interface) pour la même raison
-    * que les autres services de ce paquet qui ont besoin de getDonnees() : cette méthode est à
-    * visibilité de paquet, donc ne peut pas figurer dans IServicePortefeuille — une interface
-    * Java ne peut pas déclarer de méthode à cette visibilité. C'est un choix assumé, pas un oubli
-    * de la règle qui veut que les services dépendent normalement d'une interface IServiceXxx :
-    * voir le journal de développement pour le détail.
+    * Il dépend de ServicePortefeuille (la classe concrète) pour la même raison que les autres
+    * services de ce paquet qui ont besoin de getDonnees() : cette méthode est à visibilité de
+    * paquet, donc ne pourrait pas figurer dans une interface publique — une interface Java ne
+    * peut pas déclarer de méthode à cette visibilité. C'est pour cette même raison que
+    * ServicePortefeuille n'a pas d'interface IServicePortefeuille : elle n'aurait porté que des
+    * méthodes que ses seuls appelants légitimes (les autres services de ce paquet) ont le droit
+    * d'appeler. C'est un choix assumé, pas un oubli de la règle qui veut que les services
+    * dépendent normalement d'une interface IServiceXxx : voir le journal de développement pour
+    * le détail.
 */
 public class ServiceSolde implements IServiceSolde {
     private final ServicePortefeuille servicePortefeuille;

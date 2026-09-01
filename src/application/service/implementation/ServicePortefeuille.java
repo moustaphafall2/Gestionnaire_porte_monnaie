@@ -6,7 +6,6 @@ import domain.entity.Portefeuille;
 import domain.enumeration.Categorie;
 import domain.enumeration.SensMouvement;
 import domain.enumeration.TypeTransaction;
-import application.service.interfaces.IServicePortefeuille;
 import infrastructure.persistence.PortefeuilleRepository;
 
 /*
@@ -32,7 +31,7 @@ import infrastructure.persistence.PortefeuilleRepository;
     * application.service.implementation manipuler directement le Portefeuille — mais seulement
     * eux, puisque les contrôleurs et les vues sont dans d'autres paquets et n'y ont pas accès.
 */
-public class ServicePortefeuille implements IServicePortefeuille {
+public class ServicePortefeuille {
     private final Portefeuille portefeuille;
     private final PortefeuilleRepository portefeuilleRepository;
 

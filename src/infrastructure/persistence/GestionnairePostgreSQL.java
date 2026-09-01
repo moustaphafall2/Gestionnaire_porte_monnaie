@@ -19,11 +19,10 @@ import exception.ErreurChargementException;
 import exception.ErreurSauvegardeException;
 
 /*
-    * GestionnairePostgreSQL est l'implémentation PostgreSQL/JDBC de PortefeuilleRepository,
-    * celle qui remplacera GestionnaireFichier (JSON) une fois la migration terminée. Comme
-    * GestionnaireFichier, elle isole toute la logique de lecture/écriture du reste de
-    * l'application : ServicePortefeuille ne connaît que l'interface PortefeuilleRepository,
-    * jamais cette classe ni le SQL qu'elle exécute.
+    * GestionnairePostgreSQL est l'implémentation PostgreSQL/JDBC de PortefeuilleRepository. Elle
+    * isole toute la logique de lecture/écriture du reste de l'application : ServicePortefeuille
+    * ne connaît que l'interface PortefeuilleRepository, jamais cette classe ni le SQL qu'elle
+    * exécute.
     *
     * Chaque méthode ouvre sa propre connexion via ConnexionBaseDeDonnees.ouvrir() et la referme
     * (try-with-resources) : pas de connexion partagée gardée entre deux appels, plus simple à
@@ -36,11 +35,10 @@ import exception.ErreurSauvegardeException;
 public class GestionnairePostgreSQL implements PortefeuilleRepository {
 
     // Reconstruit le portefeuille en mémoire à partir des quatre tables, en une seule fois au
-    // démarrage de l'application. Contrairement à GestionnaireFichier, aucune "réparation après
-    // chargement" n'est nécessaire ici : Portefeuille() initialise déjà ses listes vides dans
-    // son constructeur, et chaque ligne lue passe par une méthode d'ajout de l'entité
-    // (ajouterTransaction, activerCategorie, ajouterObjectif) — jamais par un contournement du
-    // constructeur comme le fait Gson à la désérialisation.
+    // démarrage de l'application. Aucune "réparation après chargement" n'est nécessaire :
+    // Portefeuille() initialise déjà ses listes vides dans son constructeur, et chaque ligne lue
+    // passe par une méthode d'ajout de l'entité (ajouterTransaction, activerCategorie,
+    // ajouterObjectif) — jamais par un contournement du constructeur.
     public Portefeuille charger() {
         Portefeuille portefeuille = new Portefeuille();
 
@@ -253,15 +251,5 @@ public class GestionnairePostgreSQL implements PortefeuilleRepository {
         } catch (SQLException exception) {
             throw new ErreurSauvegardeException("Impossible de supprimer l'objectif " + id + ".", exception);
         }
-    }
-
-    // Pas encore implémentée. La sous-étape suivante remplace sauvegarder(Portefeuille) par des
-    // méthodes granulaires sur PortefeuilleRepository (une par mutation), conformément à
-    // l'analyse validée — ce corps temporaire ne doit jamais être appelé avant cette réécriture :
-    // GestionnairePostgreSQL n'est pas encore branchée dans Main, qui continue d'utiliser
-    // GestionnaireFichier pour l'écriture.
-    public void sauvegarder(Portefeuille portefeuille) {
-        throw new UnsupportedOperationException(
-                "GestionnairePostgreSQL.sauvegarder(Portefeuille) sera remplacée par des méthodes granulaires à la sous-étape suivante.");
     }
 }

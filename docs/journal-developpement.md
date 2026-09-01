@@ -3289,3 +3289,118 @@ avec PostgreSQL et validés — la confirmation doit venir de lui, pas être dé
 supprimé tant que cette confirmation explicite n'a pas été donnée, y compris `GestionnaireFichier`,
 `lib/gson-2.13.1.jar` et `portefeuille.json`, déjà soumis à la même condition depuis le début de
 l'étape 6.
+
+## 2026-09-01 — Sous-étape (3/3) exécutée : suppression des orphelins, nettoyage des commentaires
+
+### Ce qui a été écrit
+
+Suppressions, après confirmation explicite de l'étudiant sur l'inventaire proposé :
+- `src/infrastructure/persistence/GestionnaireFichier.java` et `lib/gson-2.13.1.jar` : la
+  persistance JSON n'a plus aucun appelant depuis le basculement sur PostgreSQL.
+- `src/application/service/interfaces/IServicePortefeuille.java` : interface vide, sans appelant.
+- Les trois méthodes de `VueConsole` liées à la boucle de reprise
+  (`demanderNouvelleTentativeSauvegarde`, `afficherSauvegardeReussie`,
+  `afficherSauvegardeAbandonnee`), sans appelant depuis que persister précède muter la mémoire.
+- Les cinq classes `Tester*.java` à la racine de `src`, des scripts manuels de l'ancienne
+  persistance JSON.
+
+Corrections de commentaires, dans `Portefeuille`, `Main`, `ServiceSolde`, `ControleurCategorie`,
+`GestionnairePostgreSQL`, `PortefeuilleRepository` et `ErreurChargementException` : tous
+faisaient encore référence à Gson, `GestionnaireFichier` ou `IServicePortefeuille`, des classes
+maintenant supprimées ou jamais recréées. Deux d'entre eux corrigeaient une vraie contradiction :
+celui de `Main`, qui annonçait encore une boucle de reprise disparue depuis la sous-étape
+précédente, et celui de `ErreurChargementException`, qui décrivait encore les cas d'absence de
+fichier JSON alors que la classe sert maintenant à signaler un échec de connexion PostgreSQL ou
+de lecture de `db.properties`.
+
+### Choix de conception
+
+**Les vérifications `== null` dans `getTransactions()`/`getObjectifs()` de `Portefeuille` sont
+conservées**, contrairement à la première proposition qui envisageait de les enlever puisque plus
+aucun chemin ne construit un `Portefeuille` dans cet état (elles dataient de la réparation après
+désérialisation Gson, qui n'existe plus). Décision de l'étudiant : elles ne coûtent rien et
+protègent contre un `Portefeuille` mal construit si un futur appelant contournait un jour le
+constructeur. Seul le commentaire a changé, pour ne plus attribuer la vérification à Gson.
+
+**Le commentaire de `ServiceSolde` explique maintenant directement pourquoi
+`ServicePortefeuille` n'a pas d'interface `IServicePortefeuille` du tout**, plutôt que de
+renvoyer vers une interface supprimée comme si elle existait encore : `getDonnees()`, dont
+`ServiceSolde` et les autres services du paquet ont besoin, est à visibilité de paquet, et une
+interface Java ne peut pas déclarer de méthode à cette visibilité. Une interface
+`IServicePortefeuille` n'aurait donc jamais pu porter cette méthode.
+
+**`sauvegarder(Portefeuille)` (dans `PortefeuilleRepository` et son implémentation dans
+`GestionnairePostgreSQL`) n'a volontairement pas été touché**, ni supprimé ni même reformulé,
+bien que la vérification `grep` montre qu'aucun appelant ne l'utilise plus (`Main` est déjà
+branché sur les méthodes granulaires depuis la sous-étape précédente) et que le commentaire de
+`PortefeuilleRepository` annonce lui-même sa disparition "au branchement final". Ce n'était pas
+dans l'inventaire soumis à l'étudiant, et la même règle que pour les autres orphelins de cette
+entrée s'applique : rien ne se supprime sans une confirmation explicite et séparée. Signalé
+ci-dessous, en reste à faire.
+
+### Points à savoir défendre
+
+- **Pourquoi garder une vérification `== null` dans une entité, alors que la convention du
+  projet est qu'on ne construit jamais un `Portefeuille` ailleurs que dans son service ?** Parce
+  que la convention protège contre les mauvais appelants, pas contre les bugs. La vérification ne
+  coûte rien à l'exécution ni à la lecture, et elle amortit un contournement futur du constructeur
+  sans qu'on ait à s'en souvenir.
+- **Pourquoi `ServicePortefeuille` reste la seule classe de `application.service.implementation`
+  sans interface `IServiceXxx`, alors que la règle du projet en impose une pour chaque service ?**
+  Parce que sa méthode `getDonnees()`, à visibilité de paquet, est appelée par les autres services
+  du même paquet et ne doit surtout pas être accessible depuis les contrôleurs. Une interface
+  publique ne peut pas déclarer une méthode à visibilité de paquet : il n'y a donc pas
+  d'interface possible ici, seulement la classe concrète.
+
+### Reste à faire
+
+Décider si `sauvegarder(Portefeuille)` doit être retiré de `PortefeuilleRepository` et de son
+implémentation `GestionnairePostgreSQL` (méthode confirmée sans appelant, `UnsupportedOperationException`
+en corps). Repéré pendant cette sous-étape, pas encore soumis à confirmation explicite.
+
+## 2026-09-01 — Complément à la sous-étape (3/3) : dernier orphelin, .gitignore, README
+
+### Ce qui a été écrit
+
+Trois oublis de l'entrée précédente, signalés par l'étudiant après relecture de l'inventaire :
+
+- `sauvegarder(Portefeuille)` supprimée de `PortefeuilleRepository` et de son implémentation
+  `GestionnairePostgreSQL` — c'était le dernier orphelin de la migration, laissé de côté dans
+  l'entrée précédente parce qu'il n'était pas dans l'inventaire initialement soumis. Une méthode
+  d'interface dont la seule implémentation levait `UnsupportedOperationException` induisait en
+  erreur quiconque lisait le contrat sans lire aussi son implémentation.
+- `portefeuille.json` retiré du `.gitignore` : plus aucun fichier de ce nom n'est produit par
+  l'application depuis le passage à PostgreSQL.
+- `README.md` mis à jour sur ses quatre sections encore écrites pour l'ancienne version JSON :
+  dépendances (pilote JDBC PostgreSQL et Docker au lieu de Gson), commande de compilation et de
+  lancement (classpath sur `lib/postgresql-42.7.4.jar`, démarrage préalable des conteneurs),
+  section "Données" (PostgreSQL, `docker-compose.yml`, `sql/schema.sql`, `db.properties`, pgAdmin)
+  et arborescence du paquet `infrastructure.persistence` (`PortefeuilleRepository`,
+  `GestionnairePostgreSQL`, `ConnexionBaseDeDonnees`). Au passage, la description de la sauvegarde
+  dans la section Architecture ne renvoyait plus vers une méthode qui existait : elle explique
+  maintenant que `ServicePortefeuille` relaie chaque mutation par une méthode granulaire dédiée,
+  avant de faire évoluer la mémoire, et pourquoi il n'a pas d'interface `IServiceXxx`.
+
+Les trois autres points de l'inventaire que l'étudiant demandait à confirmer — les compteurs
+`prochainIdTransaction`/`prochainIdObjectif` avec leurs quatre accesseurs, et les trois setters de
+réparation Gson de `Portefeuille` — étaient déjà supprimés dans l'entrée précédente : vérifié à
+nouveau par relecture du fichier, rien à faire de ce côté.
+
+### Choix de conception
+
+Aucun nouveau choix : ce complément exécute des décisions déjà actées, il ne rouvre aucune
+question de conception.
+
+### Points à savoir défendre
+
+- **Pourquoi la description de la sauvegarde dans le README a-t-elle changé de forme, et pas
+  seulement de nom de méthode ?** Parce que le modèle a changé, pas seulement l'implémentation :
+  avant, une méthode unique réécrivait tout le portefeuille ; maintenant, chaque opération a sa
+  propre méthode de persistance sur `PortefeuilleRepository`, appelée avant que la mémoire ne
+  change. Documenter l'ancienne forme aurait laissé croire à une seule méthode de sauvegarde.
+
+### Reste à faire
+
+Rien d'identifié pour cette sous-étape. `Dockerfile`/`.dockerignore` pour l'application
+elle-même restent à écrire (mentionnés en section 6 bis du cahier des charges), pas encore
+abordés.
