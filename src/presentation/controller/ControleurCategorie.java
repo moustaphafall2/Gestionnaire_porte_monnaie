@@ -5,14 +5,8 @@ import application.service.interfaces.IServiceCategorie;
 import presentation.view.VueCategorie;
 
 /*
-    * ControleurCategorie enchaîne l'écran "Gérer mes catégories" : activer une catégorie,
-    * en désactiver une. Chaque méthode se lit de haut en bas, sans appeler d'autre méthode
-    * privée : elle demande un choix à la vue, appelle le service, transmet le résultat à la vue.
-    *
-    * Ni l'une ni l'autre n'a besoin de IServiceSolde : activer/désactiver une catégorie ne
-    * dépend jamais du solde, contrairement aux écrans transaction et épargne. La reprise
-    * après un échec de sauvegarde n'est plus gérée ici : elle est traitée une seule fois dans
-    * Main, autour de l'appel à ces méthodes.
+    * ControleurCategorie enchaîne l'écran "Gérer mes catégories" : activer ou désactiver une
+    * catégorie.
 */
 public class ControleurCategorie {
     private final VueCategorie vueCategorie;

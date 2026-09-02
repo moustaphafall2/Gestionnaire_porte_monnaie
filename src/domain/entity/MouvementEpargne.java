@@ -3,17 +3,11 @@ package domain.entity;
 import java.time.LocalDate;
 
 import domain.enumeration.SensMouvement;
-/*
-    * La classe MouvementEpargne représente un mouvement d'épargne dans le système.
-    * Chaque mouvement d'épargne a un montant, un sens (contribution ou retrait), et une date.
-    * La classe est utilisée pour suivre les mouvements d'épargne effectués par l'utilisateur, permettant ainsi de gérer les contributions et les retraits d'argent dans le système.
-    *
-    * Elle ne valide plus rien elle-même : la validation (montant strictement positif, sens non
-    * nul, date jamais postérieure au jour) est portée par ServiceEpargne. Toute construction d'un
-    * MouvementEpargne doit obligatoirement passer par ce service — un appel direct au
-    * constructeur ailleurs dans le code contournerait ces règles.
-*/
 
+/*
+    * MouvementEpargne représente une contribution ou un retrait sur un objectif d'épargne. Ne
+    * valide rien elle-même : toute construction doit passer par ServiceEpargne.
+*/
 public class MouvementEpargne {
 
     private double montant;
@@ -27,7 +21,6 @@ public class MouvementEpargne {
         this.date = date;
     }
 
-    // Getters
     public double getMontant() {
         return montant;
     }

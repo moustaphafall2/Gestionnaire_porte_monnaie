@@ -31,7 +31,6 @@ public class TransactionDTO {
         this.description = description;
     }
 
-    // Getters
     public int getId() {
         return id;
     }

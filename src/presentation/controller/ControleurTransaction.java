@@ -12,16 +12,7 @@ import presentation.view.VueTransaction;
 /*
     * ControleurTransaction porte les huit actions de l'écran transactions : ajouter une dépense,
     * ajouter un revenu, afficher l'historique complet, le filtrer par date/catégorie/type,
-    * modifier une transaction, supprimer une transaction. Chaque méthode publique se lit de haut
-    * en bas sans dépendre d'une autre méthode privée ; modifierTransaction() et
-    * supprimerTransaction() réutilisent afficherHistoriqueComplet() (méthode publique sœur, pas
-    * une méthode privée partagée) pour montrer la liste avant de demander un identifiant.
-    *
-    * La reprise après un échec de sauvegarde n'est plus gérée ici : ErreurSauvegardeException
-    * n'est attrapée nulle part dans cette classe, elle remonte jusqu'à Main, qui la traite une
-    * seule fois pour toutes les actions du programme. Les exceptions métier
-    * (IllegalArgumentException, IllegalStateException), elles, restent attrapées ici : ce sont
-    * des erreurs propres à l'action en cours, pas un problème de disque.
+    * modifier une transaction, supprimer une transaction.
 */
 public class ControleurTransaction {
     private final VueTransaction vueTransaction;
@@ -50,9 +41,7 @@ public class ControleurTransaction {
 
         vueTransaction.afficherRecapitulatif(montant, categorie, date);
 
-        // Règle de gestion "dépense > solde ⇒ avertissement" : le seuil est calculé par
-        // ServiceSolde.depenseRendraSoldeNegatif(), pas ici. Le contrôleur ne fait que brancher
-        // sur ce booléen, exactement comme pour ServiceEpargne.depasseraCible().
+        // Règle de gestion : autorisée malgré l'avertissement, car une dépense constate un fait déjà survenu, pas une décision prise à l'instant.
         if (serviceSolde.depenseRendraSoldeNegatif(montant)) {
             vueTransaction.afficherAvertissementSoldeNegatif(serviceSolde.soldeApresDepense(montant));
         }
@@ -114,10 +103,6 @@ public class ControleurTransaction {
         }
 
         try {
-            // La catégorie proposée doit être active (règle de gestion "catégorie cohérente") :
-            // une catégorie inactive choisie ici serait rejetée par IServiceTransaction, après
-            // coup, une fois toutes les saisies déjà faites. On restreint donc aux catégories
-            // actives du même type que la transaction existante.
             TypeTransaction type = serviceTransaction.getTransaction(id).getType();
             if (!serviceCategorie.aCategorieActiveDeType(type)) {
                 vueTransaction.afficherAucuneCategorieActive(type);

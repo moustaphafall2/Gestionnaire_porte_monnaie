@@ -24,8 +24,6 @@ public class StatistiqueDTO {
         this.totalDepenses = totalDepenses;
     }
 
-    // Getters. totalParCategorie renvoyée comme vue non modifiable, même règle que les getters
-    // de liste des entités (section 5 du CLAUDE.md) : le DTO garde le contrôle de son contenu.
     public Map<Categorie, Double> getTotalParCategorie() {
         return Collections.unmodifiableMap(totalParCategorie);
     }

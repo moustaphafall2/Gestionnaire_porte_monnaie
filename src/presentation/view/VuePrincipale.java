@@ -1,10 +1,7 @@
 package presentation.view;
 
 /*
-    * VuePrincipale affiche le menu principal et l'écran "voir le solde". Elle hérite de
-    * VueConsole pour ses briques de saisie/affichage générales (lireEntier, afficherMessage...),
-    * gardées internes à cette classe : Main ne connaît le texte d'aucune invite, il appelle
-    * demanderChoix() et ne reçoit que le choix saisi.
+    * VuePrincipale affiche le menu principal et l'écran "voir le solde".
 */
 public class VuePrincipale extends VueConsole {
 
@@ -21,9 +18,6 @@ public class VuePrincipale extends VueConsole {
         afficherMessage("8. Quitter");
     }
 
-    // Affiche le menu principal et lit le choix en un seul appel, même patron que
-    // VueCategorie.demanderChoixMenu() : Main fait directement son switch sur la valeur
-    // renvoyée ici, sans jamais connaître le texte de l'invite.
     public int demanderChoix() {
         afficherMenuPrincipal();
         return lireEntier("Votre choix : ");

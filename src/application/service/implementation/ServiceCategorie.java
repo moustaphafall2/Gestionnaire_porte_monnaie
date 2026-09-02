@@ -10,14 +10,8 @@ import application.service.interfaces.IServiceCategorie;
 import infrastructure.persistence.CategorieRepository;
 
 /*
-    * ServiceCategorie porte les règles de gestion des catégories actives : savoir si une
-    * catégorie est active, si un type de transaction a au moins une catégorie active, quelles
-    * catégories restent disponibles à l'activation, et l'activation/désactivation elles-mêmes.
-    * `Portefeuille.activerCategorie`/`desactiverCategorie` restent des méthodes structurelles
-    * (ajout/retrait dans un Set), mais persister ce changement avant de l'appliquer en mémoire
-    * est une responsabilité du service, jamais de l'entité : il parle pour ça directement à
-    * CategorieRepository, plus par l'intermédiaire de ServicePortefeuille depuis l'étape
-    * repository.
+    * ServiceCategorie porte les règles de gestion des catégories actives : activation,
+    * désactivation, disponibilité par type.
 */
 public class ServiceCategorie implements IServiceCategorie{
     private final ServicePortefeuille servicePortefeuille;
@@ -32,7 +26,6 @@ public class ServiceCategorie implements IServiceCategorie{
         return servicePortefeuille.getDonnees().getCategoriesActives().contains(categorie);
     }
 
-    // Catégories actuellement actives, utilisée par ControleurCategorie pour l'affichage.
     public Set<Categorie> getCategoriesActives() {
         return servicePortefeuille.getDonnees().getCategoriesActives();
     }
@@ -42,17 +35,12 @@ public class ServiceCategorie implements IServiceCategorie{
         servicePortefeuille.getDonnees().activerCategorie(categorie);
     }
 
-    // Règle de gestion : la désactivation n'a aucun effet sur les transactions déjà
-    // enregistrées avec cette catégorie. Portefeuille.desactiverCategorie ne fait que la
-    // retirer de l'ensemble des catégories actives, jamais des transactions elles-mêmes.
+    // Règle de gestion : la désactivation n'a aucun effet sur les transactions déjà enregistrées.
     public void desactiverCategorie(Categorie categorie) {
         categorieRepository.desactiver(categorie);
         servicePortefeuille.getDonnees().desactiverCategorie(categorie);
     }
 
-    // Indique si au moins une catégorie active correspond à ce type. Utilisé par
-    // ControleurTransaction pour vérifier la précondition avant de proposer d'ajouter une
-    // dépense/un revenu.
     public boolean aCategorieActiveDeType(TypeTransaction type) {
         for (Categorie categorie : servicePortefeuille.getDonnees().getCategoriesActives()) {
             if (categorie.getType() == type) {
@@ -62,7 +50,6 @@ public class ServiceCategorie implements IServiceCategorie{
         return false;
     }
 
-    // Catégories de la liste complète (l'énumération) qui ne sont pas encore actives
     public List<Categorie> getCategoriesDisponibles() {
         List<Categorie> disponibles = new ArrayList<>();
         for (Categorie categorie : Categorie.values()) {
@@ -73,9 +60,6 @@ public class ServiceCategorie implements IServiceCategorie{
         return disponibles;
     }
 
-    // Catégories actives qui correspondent à ce type. Utilisée par ControleurTransaction pour
-    // proposer, à l'ajout d'une dépense ou d'un revenu, uniquement les catégories du bon type
-    // (règle de gestion "catégorie cohérente").
     public List<Categorie> getCategoriesActivesDeType(TypeTransaction type) {
         List<Categorie> resultat = new ArrayList<>();
         for (Categorie categorie : servicePortefeuille.getDonnees().getCategoriesActives()) {

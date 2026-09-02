@@ -16,18 +16,10 @@ import exception.ErreurChargementException;
 import exception.ErreurSauvegardeException;
 
 /*
-    * TransactionRepository lit et écrit la seule table transaction_financiere : chargement
-    * complet, ajout, modification, suppression. Chaque méthode ouvre sa propre connexion via
-    * ConnexionBaseDeDonnees.ouvrir() et la referme (try-with-resources).
-    *
-    * PreparedStatement systématiquement, même pour une requête sans paramètre : jamais de SQL
-    * construit par concaténation de chaînes, c'est la règle du projet contre l'injection SQL.
-    * Pas d'interface, comme les trois autres repositories : décision de la maîtresse de stage.
+    * TransactionRepository lit et écrit la table transaction_financiere.
 */
 public class TransactionRepository {
 
-    // Historique complet, non trié : le tri par date la plus récente d'abord est un traitement,
-    // il reste dans ServiceTransaction.getHistorique(), pas ici.
     public List<Transaction> chargerToutes() {
         String requete = "SELECT id, montant, type, categorie, date_transaction, description FROM transaction_financiere";
         List<Transaction> transactions = new ArrayList<>();
@@ -36,7 +28,7 @@ public class TransactionRepository {
                 ResultSet resultat = instruction.executeQuery()) {
             while (resultat.next()) {
                 // java.sql.Date -> LocalDate via toLocalDate(), jamais par une chaîne formatée
-                // à la main (piège connu du projet).
+                // à la main.
                 transactions.add(new Transaction(
                         resultat.getInt("id"),
                         resultat.getDouble("montant"),
@@ -52,9 +44,7 @@ public class TransactionRepository {
     }
 
     // RETURNING id : PostgreSQL renvoie l'identifiant généré par la colonne SERIAL directement
-    // dans le résultat de l'INSERT, en une seule instruction — plus simple à écrire et à lire
-    // que getGeneratedKeys() (l'API JDBC générique, pensée pour rester portable entre bases de
-    // données différentes, ce qui n'est pas un objectif ici).
+    // dans le résultat de l'INSERT.
     public int ajouter(double montant, TypeTransaction type, Categorie categorie, LocalDate date, String description) {
         String requete = "INSERT INTO transaction_financiere (montant, type, categorie, date_transaction, description) "
                 + "VALUES (?, ?, ?, ?, ?) RETURNING id";

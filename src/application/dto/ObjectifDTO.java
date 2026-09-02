@@ -23,7 +23,6 @@ public class ObjectifDTO {
         this.pourcentageAtteint = pourcentageAtteint;
     }
 
-    // Getters
     public int getId() {
         return id;
     }

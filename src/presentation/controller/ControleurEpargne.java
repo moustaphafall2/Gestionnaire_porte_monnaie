@@ -9,16 +9,7 @@ import presentation.view.VueEpargne;
 
 /*
     * ControleurEpargne porte les cinq actions de l'écran objectifs d'épargne : créer, contribuer,
-    * retirer, afficher, supprimer. Chaque méthode publique se lit de haut en bas ; la seule
-    * méthode privée, afficherListeObjectifs(), est partagée par les quatre actions qui ont
-    * besoin d'afficher la liste avant de continuer (voir plus bas).
-    *
-    * La reprise après un échec de sauvegarde n'est plus gérée ici : ErreurSauvegardeException
-    * n'est attrapée nulle part dans cette classe, elle remonte jusqu'à Main. Les exceptions
-    * métier (IllegalArgumentException, IllegalStateException), elles, restent attrapées
-    * localement à chaque action : avant, une seule capture partagée couvrait les cinq actions
-    * dans gererObjectifsEpargne() ; maintenant que chaque action est indépendante, chacune porte
-    * la sienne.
+    * retirer, afficher, supprimer.
 */
 public class ControleurEpargne {
     private final VueEpargne vueEpargne;
@@ -60,10 +51,7 @@ public class ControleurEpargne {
             vueEpargne.afficherSoldeDisponible(serviceSolde.getSoldeDisponible());
             double montant = vueEpargne.demanderMontantContribution();
 
-            // Règle de gestion : une contribution qui dépasse la cible reste autorisée, avec un
-            // simple signalement avant confirmation (le refus ne porte que sur le solde
-            // disponible, vérifié par ServiceEpargne.contribuerObjectif au moment de
-            // l'enregistrement).
+            // Règle de gestion : un dépassement de la cible n'est pas une erreur, simple signalement.
             if (serviceEpargne.depasseraCible(id, montant)) {
                 vueEpargne.afficherAvertissementDepassementCible();
             }
@@ -135,11 +123,6 @@ public class ControleurEpargne {
         }
     }
 
-    // Récupère la liste des objectifs, déjà prête à afficher (chaque ObjectifDTO porte son
-    // montant actuel et son pourcentage atteint), et la transmet à VueEpargne.afficherObjectifs().
-    // Ni boucle ni test de liste vide ici : les deux sont dans la vue. Partagée par
-    // contribuerObjectif(), retirerObjectif(), afficherObjectifs() et supprimerObjectif(), qui
-    // ont toutes besoin de montrer la liste avant de demander un identifiant.
     private void afficherListeObjectifs() {
         vueEpargne.afficherObjectifs(serviceEpargne.getObjectifs());
     }

@@ -7,10 +7,7 @@ import domain.enumeration.Categorie;
 
 /*
     * VueStatistique affiche l'écran "Voir les statistiques" : total dépensé par catégorie et
-    * comparaison revenus/dépenses sur une période. Comme les autres vues d'écran, elle hérite
-    * de VueConsole pour ses briques de saisie/affichage générales (lireDate...), gardées internes
-    * à cette classe : le contrôleur ne connaît le texte d'aucune invite, il appelle des méthodes
-    * nommées et ne reçoit que la date saisie ou les totaux déjà calculés par ServiceStatistique.
+    * comparaison revenus/dépenses sur une période.
 */
 public class VueStatistique extends VueConsole {
 

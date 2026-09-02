@@ -3576,3 +3576,103 @@ imprévu : les erreurs du compilateur ont servi de liste de choses restant à fa
 
 Rien d'identifié pour cette étape. Le rôle final de `ServicePortefeuille` reste une question
 ouverte, à trancher avec la maîtresse de stage.
+
+## 2026-09-02 — Allègement des commentaires : nouvelle charte de sobriété
+
+### Ce qui a été écrit
+
+`CLAUDE.md` remplace la charte de commentaires précédente par une version sobre, décidée par la
+maîtresse de stage. Passe appliquée sur les 39 fichiers `.java` de `src/` (les 5 interfaces
+`IServiceXxx` n'avaient déjà aucun commentaire). Total des lignes de commentaire : de ~700 à
+~245.
+
+Retiré partout où il apparaissait : les commentaires qui paraphrasent le code, ceux sur les
+getters/setters/constructeurs triviaux, les justifications de décisions d'architecture, les
+références aux étapes de migration et aux classes supprimées (`GestionnaireFichier`,
+`PortefeuilleRepository`, `ControleurPrincipal`, `ControleurCategorie.gererCategories()`,
+`confirmerNouvelleSauvegarde`), les comparaisons entre classes ("contrairement à X..."), les
+en-têtes de classe de plus de quatre lignes.
+
+Conservé, en une ligne : les cinq règles de gestion validées (coffre, refus de retrait,
+suppression d'un objectif vide, formule du solde, cohérence catégorie/type), les trois pièges
+techniques (Scanner unique dans `VueConsole`, conversion `java.sql.Date`/`LocalDate` dans
+`TransactionRepository`, `Types.DATE` pour une date facultative dans `EpargneRepository`), et
+les deux mécanismes SQL non évidents (`RETURNING id`, `ON CONFLICT DO NOTHING`).
+
+### Choix de conception
+
+**Deux points signalés par l'étudiant, vérifiés avant d'appliquer.** La note sur
+`java.sql.Date` n'était déjà que dans `TransactionRepository` : `ServiceTransaction` n'en portait
+aucune trace, rien à déplacer. Le commentaire de `Main` citant
+`ControleurCategorie.gererCategories()`, une méthode disparue depuis l'étape 3, a été retiré
+entièrement plutôt que reformulé : le code (afficher les catégories actives avant le sous-menu)
+se lit sans explication.
+
+**`ErreurSauvegardeException` et `ErreurChargementException` réécrites, pas seulement
+raccourcies.** Leurs commentaires décrivaient encore le monde d'avant PostgreSQL (fichier de
+sauvegarde, opération "déjà appliquée en mémoire", renvoi vers une méthode `confirmerNouvelleSauvegarde`
+qui n'existe nulle part) : un reliquat de l'audit du 2026-09-01, jamais corrigé faute d'avoir
+été dans le périmètre validé à l'époque. Corrigé au passage.
+
+**Les règles "dépense > solde" et "contribution > cible" perdent leur commentaire**, dans
+`ServiceSolde`/`ControleurTransaction` et `ServiceEpargne`/`ControleurEpargne`, alors que ce sont
+des règles de gestion réelles. Elles n'étaient pas dans la liste des cinq validées par
+l'étudiant ; retirées par cohérence avec une liste fermée plutôt que par une décision cachée
+d'en exclure certaines. À rouvrir si l'omission n'était pas volontaire.
+
+### Points à savoir défendre
+
+- **Pourquoi certaines règles de gestion ont un commentaire et d'autres non ?** Seules celles
+  d'une liste validée à l'avance (coffre, refus de retrait, suppression si vide, formule du
+  solde, cohérence catégorie/type) gardent une ligne. Le critère : une règle assez surprenante
+  pour qu'un lecteur, sans elle, puisse croire à une erreur.
+- **Où est passée l'explication du choix `RETURNING id` plutôt que `getGeneratedKeys()` ?**
+  Réduite à un rappel du mécanisme ("RETURNING id : ..."), sans la comparaison avec l'API
+  générique. Le mécanisme reste visible, la justification du choix est dans le journal.
+
+### Pièges rencontrés
+
+Aucun. Recompilation propre du premier coup, scénario de bout en bout (solde, historique et
+trois filtres, épargne avec objectifs et pourcentages, catégories actives, statistiques) rejoué
+sans différence de comportement.
+
+### Reste à faire
+
+Vérifier avec l'étudiant si "dépense > solde" et "contribution > cible" doivent rejoindre la
+liste des règles commentées (voir choix de conception ci-dessus).
+
+## 2026-09-02 — Complément : deux règles de gestion oubliées dans l'allègement
+
+### Ce qui a été écrit
+
+Les deux règles retirées par excès de rigueur dans la passe précédente ("dépense > solde" et
+"contribution > cible") retrouvent chacune une ligne de commentaire, à leur point d'application
+(`ControleurTransaction.ajouterDepense()` et `ControleurEpargne.contribuerObjectif()`) — c'était
+un oubli de la liste validée, pas une décision.
+
+### Choix de conception
+
+**La règle "dépense > solde" précise maintenant pourquoi elle diffère de la règle du coffre**,
+plutôt que de se contenter d'annoncer l'autorisation : une dépense constate un fait déjà survenu,
+une contribution est une décision prise à l'instant. Sans cette précision, un lecteur qui vient de
+lire "refusée si le montant dépasse le solde disponible" pour l'épargne pouvait légitimement se
+demander pourquoi la même situation est traitée différemment pour une dépense.
+
+**La règle "contribution > cible" précise que le dépassement n'est pas une erreur**, pour la
+même raison : sans ce mot, un lecteur pouvait croire à un contrôle manquant plutôt qu'à une
+autorisation volontaire.
+
+### Points à savoir défendre
+
+- **Pourquoi une dépense peut mettre le solde en négatif alors qu'une contribution ne le peut
+  pas ?** Une dépense enregistrée a déjà eu lieu dans la réalité : la refuser ne changerait rien
+  à ce qui s'est passé, seulement à ce que l'application sait. Une contribution, elle, est un
+  choix qu'on peut encore ne pas faire — le coffre ne s'ouvre que sur de l'argent disponible.
+
+### Pièges rencontrés
+
+Aucun.
+
+### Reste à faire
+
+Rien d'identifié.

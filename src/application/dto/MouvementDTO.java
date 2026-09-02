@@ -22,7 +22,6 @@ public class MouvementDTO {
         this.date = date;
     }
 
-    // Getters
     public double getMontant() {
         return montant;
     }

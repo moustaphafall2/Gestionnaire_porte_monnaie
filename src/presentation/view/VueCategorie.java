@@ -7,10 +7,7 @@ import domain.enumeration.Categorie;
 
 /*
     * VueCategorie affiche l'écran "Gérer mes catégories" : consulter les catégories actives,
-    * en activer une parmi celles qui ne le sont pas encore, en désactiver une. Comme les autres
-    * vues d'écran, elle hérite de VueConsole pour ses briques de saisie/affichage générales et
-    * n'ajoute que ce qui est propre à cet écran : le contrôleur ne construit aucun texte à
-    * afficher, il ne fait que lui transmettre les valeurs obtenues des services.
+    * en activer une, en désactiver une.
 */
 public class VueCategorie extends VueConsole {
 
@@ -20,8 +17,6 @@ public class VueCategorie extends VueConsole {
         afficherMessage("3. Retour");
     }
 
-    // Affiche le sous-menu et lit le choix en un seul appel : Main n'a plus besoin d'une méthode
-    // intermédiaire pour ça, il fait directement son switch sur la valeur renvoyée ici.
     public int demanderChoixMenu() {
         afficherMenuCategories();
         return lireEntier("Votre choix : ");
@@ -52,8 +47,6 @@ public class VueCategorie extends VueConsole {
         afficherMessage("Aucune catégorie active à désactiver.");
     }
 
-    // Affiche les catégories numérotées et lit un numéro, en boucle tant qu'il ne correspond à
-    // aucune catégorie de la liste reçue.
     public Categorie demanderCategorie(List<Categorie> categories, String message) {
         afficherCategoriesNumerotees(categories);
         while (true) {
@@ -79,10 +72,6 @@ public class VueCategorie extends VueConsole {
         afficherMessage("Catégorie désactivée.");
     }
 
-    // Traitement rapatrié depuis ControleurCategorie.gererActivationCategorie() : tester si la
-    // liste est vide et choisir quel message afficher sont des décisions de présentation, pas
-    // des règles métier. La vue renvoie directement la catégorie choisie, ou null s'il n'y a
-    // rien à proposer : le contrôleur n'a plus qu'à réagir à ce résultat.
     public Categorie demanderCategorieActivation(List<Categorie> disponibles) {
         if (disponibles.isEmpty()) {
             afficherToutesActives();
@@ -91,10 +80,6 @@ public class VueCategorie extends VueConsole {
         return demanderCategorie(disponibles, "Numéro de la catégorie à activer : ");
     }
 
-    // Même déplacement que demanderCategorieActivation(), pour la désactivation. La conversion
-    // Set -> List vient aussi de ControleurCategorie : il fallait une liste indexable pour
-    // numéroter les catégories à l'affichage, ce qui est un besoin d'affichage, pas une
-    // transformation de donnée métier.
     public Categorie demanderCategorieDesactivation(Set<Categorie> actives) {
         if (actives.isEmpty()) {
             afficherAucuneActive();

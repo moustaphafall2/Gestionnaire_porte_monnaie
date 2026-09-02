@@ -6,16 +6,10 @@ import java.util.Collections;
 import java.util.List;
 
 /*
-    * Une épargne est un objectif financier que l'utilisateur souhaite atteindre en mettant de
-    * l'argent de côté : un nom, un montant cible, une date limite facultative, et la liste des
-    * mouvements (contributions et retraits) qui font évoluer le montant épargné.
-    *
-    * Elle ne valide plus rien elle-même : la validation (nom non vide, montant cible strictement
-    * positif) est portée par ServiceEpargne. Toute construction d'une Epargne doit
-    * obligatoirement passer par ce service — un appel direct au constructeur ailleurs dans le
-    * code contournerait ces règles. Les calculs (montant actuel, pourcentage atteint...) et les
-    * règles de gestion (contribution, retrait, suppression) sont eux aussi dans ServiceEpargne.
- */
+    * Epargne est un objectif d'épargne : nom, montant cible, date limite facultative, et la
+    * liste des mouvements qui font évoluer le montant épargné. Ne valide rien elle-même : toute
+    * construction doit passer par ServiceEpargne.
+*/
 public class Epargne {
 
     private int id;
@@ -32,7 +26,6 @@ public class Epargne {
         this.mouvements = new ArrayList<>();
     }
 
-    // Getters
     public int getId() {
         return id;
     }
@@ -49,9 +42,6 @@ public class Epargne {
         return Collections.unmodifiableList(mouvements);
     }
 
-    // Remplace les anciennes méthodes contribuer()/retirer() : le mouvement est désormais
-    // construit et validé par ServiceEpargne (lui seul sait si un retrait est autorisé), et
-    // l'entité se contente de l'ajouter à sa liste.
     public void ajouterMouvement(MouvementEpargne mouvement) {
         mouvements.add(mouvement);
     }

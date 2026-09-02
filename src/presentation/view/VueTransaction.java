@@ -9,11 +9,8 @@ import domain.enumeration.TypeTransaction;
 
 /*
     * VueTransaction affiche les écrans "Ajouter une dépense", "Ajouter un revenu" et "Voir
-    * l'historique des transactions" (consultation, filtres, modification, suppression). Comme
-    * VuePrincipale, elle hérite de VueConsole pour ses briques de saisie/affichage générales
-    * (lireMontant, lireDate, confirmer...), gardées internes à cette classe : le contrôleur ne
-    * connaît le texte d'aucune invite ni d'aucun message, il appelle des méthodes nommées pour
-    * ce qu'elles demandent ou affichent, et ne reçoit que la valeur saisie ou rien du tout.
+    * l'historique des transactions" (consultation, filtres, modification, suppression). Hérite
+    * de VueConsole pour ses briques de saisie/affichage générales.
 */
 public class VueTransaction extends VueConsole {
 
@@ -22,8 +19,6 @@ public class VueTransaction extends VueConsole {
         afficherMessage("Aucune catégorie de " + libelleType + " active. Activez-en une avant de continuer (menu Catégories).");
     }
 
-    // Affiche les catégories numérotées et lit le choix de l'utilisateur, en boucle tant que le
-    // numéro saisi ne correspond à aucune catégorie de la liste reçue.
     public Categorie demanderCategorie(List<Categorie> disponibles) {
         afficherCategoriesNumerotees(disponibles);
         while (true) {
@@ -49,14 +44,10 @@ public class VueTransaction extends VueConsole {
         return lireMontant("Montant du revenu : ");
     }
 
-    // Même texte pour l'ajout d'une dépense et d'un revenu : la date de la transaction se
-    // demande de la même façon dans les deux cas.
     public LocalDate demanderDate() {
         return lireDate("Date (JJ/MM/AAAA, vide = aujourd'hui) : ");
     }
 
-    // Une description vide n'est pas une erreur : la transaction n'a simplement pas de
-    // description (champ facultatif). Même texte pour l'ajout d'une dépense et d'un revenu.
     public String demanderDescription() {
         String saisie = lireLigne("Description (facultative) : ");
         return saisie.isEmpty() ? null : saisie;
@@ -86,8 +77,6 @@ public class VueTransaction extends VueConsole {
         afficherMessage("Revenu enregistré.");
     }
 
-    // ----- 4. Historique -----
-
     public LocalDate demanderDateDebut() {
         return lireDate("Date de début (JJ/MM/AAAA) : ");
     }
@@ -96,9 +85,6 @@ public class VueTransaction extends VueConsole {
         return lireDate("Date de fin (JJ/MM/AAAA) : ");
     }
 
-    // Un seul niveau : les six actions de l'écran historique, chacune avec sa propre méthode de
-    // contrôleur (afficherHistorique, filtrerParDate, filtrerParCategorie, filtrerParType,
-    // modifierTransaction, supprimerTransaction), donc chacune sa propre entrée ici.
     private void afficherMenuHistorique() {
         afficherMessage("1. Tout afficher");
         afficherMessage("2. Filtrer par date");
@@ -109,15 +95,11 @@ public class VueTransaction extends VueConsole {
         afficherMessage("7. Retour");
     }
 
-    // Affiche ce menu et lit le choix en un seul appel : Main fait directement son switch sur la
-    // valeur renvoyée ici, sans méthode intermédiaire.
     public int demanderChoixMenuHistorique() {
         afficherMenuHistorique();
         return lireEntier("Votre choix : ");
     }
 
-    // Affiche chaque transaction, une ligne par transaction, ou un message dédié si la liste
-    // reçue est vide.
     public void afficherTransactions(List<TransactionDTO> transactions) {
         if (transactions.isEmpty()) {
             afficherMessage("Aucune transaction à afficher.");
@@ -128,9 +110,6 @@ public class VueTransaction extends VueConsole {
         }
     }
 
-    // Reprend la mise en forme qui vivait auparavant dans Transaction.toString() : depuis
-    // l'introduction des DTO, ni l'entité ni TransactionDTO ne portent de mise en forme,
-    // c'est entièrement le rôle de la vue.
     private String formaterLigne(TransactionDTO transaction) {
         String descriptionAffichee = (transaction.getDescription() == null || transaction.getDescription().isBlank())
                 ? "(sans description)" : transaction.getDescription();
@@ -138,9 +117,8 @@ public class VueTransaction extends VueConsole {
                 + " - " + descriptionAffichee + ", montant = " + transaction.getMontant() + ", type = " + transaction.getType();
     }
 
-    // Propose toutes les catégories de l'énumération (pas seulement les catégories actives) :
-    // utile pour filtrer ou modifier une transaction enregistrée avec une catégorie
-    // entretemps désactivée.
+    // Propose toutes les catégories, pas seulement les actives : utile pour une transaction dont
+    // la catégorie a été désactivée depuis.
     public Categorie demanderCategorieParmiToutes() {
         return demanderCategorie(List.of(Categorie.values()));
     }
