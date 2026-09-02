@@ -6,10 +6,12 @@ import java.util.Comparator;
 import java.util.List;
 
 import application.dto.TransactionDTO;
+import application.mapper.TransactionMapper;
 import domain.entity.Transaction;
 import domain.enumeration.Categorie;
 import domain.enumeration.TypeTransaction;
 import application.service.interfaces.IServiceTransaction;
+import infrastructure.persistence.TransactionRepository;
 
 /*
     * ServiceTransaction porte les règles de gestion des dépenses et des revenus : ajout,
@@ -25,21 +27,28 @@ import application.service.interfaces.IServiceTransaction;
     *
     * Depuis l'étape DTO, il ne renvoie plus jamais de Transaction à la présentation : chaque
     * méthode consultée par ControleurTransaction renvoie un TransactionDTO, construit par
-    * versAffichage() juste avant de sortir du service. La vue ne reçoit donc jamais l'entité.
+    * TransactionMapper juste avant de sortir du service. La vue ne reçoit donc jamais l'entité.
+    * Depuis l'étape mapper, ce service ne construit plus lui-même le DTO : il ne fait que
+    * réunir les Transaction à convertir et confie la traduction à TransactionMapper.
     *
-    * Depuis l'étape 6, l'identifiant d'une nouvelle transaction vient de la base
-    * (servicePortefeuille.enregistrerNouvelleTransaction(), qui appelle PortefeuilleRepository) :
-    * il n'existe plus de compteur à lire avant de construire l'objet. Conséquence sur l'ordre des
-    * opérations, systématique désormais : persister d'abord, construire ou muter la mémoire
-    * ensuite — jamais l'inverse, contrairement à avant cette étape.
+    * Depuis l'étape repository, ce service parle directement à TransactionRepository (pas
+    * d'interface, décision de la maîtresse de stage) pour toute écriture, plus par
+    * l'intermédiaire de ServicePortefeuille : l'identifiant d'une nouvelle transaction vient de
+    * TransactionRepository.ajouter(), il n'existe plus de compteur à lire avant de construire
+    * l'objet. Ordre des opérations systématique : persister d'abord (appel au repository),
+    * construire ou muter la mémoire ensuite (servicePortefeuille.getDonnees()) — jamais
+    * l'inverse.
 */
 public class ServiceTransaction implements IServiceTransaction {
     private final ServicePortefeuille servicePortefeuille;
     private final ServiceCategorie serviceCategorie;
+    private final TransactionRepository transactionRepository;
 
-    public ServiceTransaction(ServicePortefeuille servicePortefeuille, ServiceCategorie serviceCategorie) {
+    public ServiceTransaction(ServicePortefeuille servicePortefeuille, ServiceCategorie serviceCategorie,
+            TransactionRepository transactionRepository) {
         this.servicePortefeuille = servicePortefeuille;
         this.serviceCategorie = serviceCategorie;
+        this.transactionRepository = transactionRepository;
     }
 
     // Une transaction ne peut porter qu'une catégorie active : une catégorie désactivée
@@ -52,8 +61,8 @@ public class ServiceTransaction implements IServiceTransaction {
     }
 
     // Anciennement Transaction.validerId(). L'identifiant est toujours généré par la base
-    // (servicePortefeuille.enregistrerNouvelleTransaction()), donc toujours strictement positif
-    // en pratique ; ce contrôle reste défensif, au cas où cette génération changerait un jour.
+    // (transactionRepository.ajouter()), donc toujours strictement positif en pratique ; ce
+    // contrôle reste défensif, au cas où cette génération changerait un jour.
     private void validerId(int id) {
         if (id <= 0) {
             throw new IllegalArgumentException("L'identifiant doit être strictement positif.");
@@ -115,7 +124,7 @@ public class ServiceTransaction implements IServiceTransaction {
         validerDate(date);
 
         String descriptionNormalisee = normaliserDescription(description);
-        int id = servicePortefeuille.enregistrerNouvelleTransaction(montant, TypeTransaction.DEPENSE, categorie, date, descriptionNormalisee);
+        int id = transactionRepository.ajouter(montant, TypeTransaction.DEPENSE, categorie, date, descriptionNormalisee);
         validerId(id);
         Transaction depense = new Transaction(id, montant, TypeTransaction.DEPENSE, categorie, date, descriptionNormalisee);
         servicePortefeuille.getDonnees().ajouterTransaction(depense);
@@ -129,7 +138,7 @@ public class ServiceTransaction implements IServiceTransaction {
         validerDate(date);
 
         String descriptionNormalisee = normaliserDescription(description);
-        int id = servicePortefeuille.enregistrerNouvelleTransaction(montant, TypeTransaction.REVENU, categorie, date, descriptionNormalisee);
+        int id = transactionRepository.ajouter(montant, TypeTransaction.REVENU, categorie, date, descriptionNormalisee);
         validerId(id);
         Transaction revenu = new Transaction(id, montant, TypeTransaction.REVENU, categorie, date, descriptionNormalisee);
         servicePortefeuille.getDonnees().ajouterTransaction(revenu);
@@ -143,7 +152,7 @@ public class ServiceTransaction implements IServiceTransaction {
         validerDate(nouvelleDate);
 
         String descriptionNormalisee = normaliserDescription(nouvelleDescription);
-        servicePortefeuille.enregistrerModificationTransaction(id, nouveauMontant, nouvelleCategorie, nouvelleDate, descriptionNormalisee);
+        transactionRepository.modifier(id, nouveauMontant, nouvelleCategorie, nouvelleDate, descriptionNormalisee);
 
         transaction.setMontant(nouveauMontant);
         transaction.setCategorie(nouvelleCategorie);
@@ -153,7 +162,7 @@ public class ServiceTransaction implements IServiceTransaction {
 
     public void supprimerTransaction(int id) {
         Transaction transaction = trouverTransaction(id);
-        servicePortefeuille.enregistrerSuppressionTransaction(id);
+        transactionRepository.supprimer(id);
         servicePortefeuille.getDonnees().retirerTransaction(transaction);
     }
 
@@ -161,50 +170,45 @@ public class ServiceTransaction implements IServiceTransaction {
     // connaître le type de la transaction avant de proposer les catégories actives compatibles,
     // lors d'une modification. Renvoie le DTO, jamais l'entité elle-même.
     public TransactionDTO getTransaction(int id) {
-        return versAffichage(trouverTransaction(id));
+        return TransactionMapper.versDTO(trouverTransaction(id));
     }
 
     // Historique complet, trié du plus récent au plus ancien
     public List<TransactionDTO> getHistorique() {
         List<Transaction> historique = new ArrayList<>(servicePortefeuille.getDonnees().getTransactions());
         historique.sort(Comparator.comparing(Transaction::getDate).reversed());
-
-        List<TransactionDTO> resultat = new ArrayList<>();
-        for (Transaction transaction : historique) {
-            resultat.add(versAffichage(transaction));
-        }
-        return resultat;
+        return TransactionMapper.versListeDTO(historique);
     }
 
     public List<TransactionDTO> filtrerParDate(LocalDate debut, LocalDate fin) {
-        List<TransactionDTO> resultat = new ArrayList<>();
+        List<Transaction> resultat = new ArrayList<>();
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             LocalDate date = transaction.getDate();
             if (!date.isBefore(debut) && !date.isAfter(fin)) {
-                resultat.add(versAffichage(transaction));
+                resultat.add(transaction);
             }
         }
-        return resultat;
+        return TransactionMapper.versListeDTO(resultat);
     }
 
     public List<TransactionDTO> filtrerParCategorie(Categorie categorie) {
-        List<TransactionDTO> resultat = new ArrayList<>();
+        List<Transaction> resultat = new ArrayList<>();
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             if (transaction.getCategorie() == categorie) {
-                resultat.add(versAffichage(transaction));
+                resultat.add(transaction);
             }
         }
-        return resultat;
+        return TransactionMapper.versListeDTO(resultat);
     }
 
     public List<TransactionDTO> filtrerParType(TypeTransaction type) {
-        List<TransactionDTO> resultat = new ArrayList<>();
+        List<Transaction> resultat = new ArrayList<>();
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             if (transaction.getType() == type) {
-                resultat.add(versAffichage(transaction));
+                resultat.add(transaction);
             }
         }
-        return resultat;
+        return TransactionMapper.versListeDTO(resultat);
     }
 
     // Recherche interne d'une transaction par id, réutilisée par modifierTransaction et supprimerTransaction
@@ -215,13 +219,5 @@ public class ServiceTransaction implements IServiceTransaction {
             }
         }
         throw new IllegalArgumentException("Aucune transaction avec l'identifiant " + id + ".");
-    }
-
-    // Construit le DTO transmis à la présentation à partir d'une Transaction du domaine : une
-    // simple copie des champs, sans calcul ni mise en forme (le formatage reste du ressort de
-    // VueTransaction).
-    private TransactionDTO versAffichage(Transaction transaction) {
-        return new TransactionDTO(transaction.getId(), transaction.getMontant(), transaction.getType(),
-                transaction.getCategorie(), transaction.getDate(), transaction.getDescription());
     }
 }

@@ -7,20 +7,25 @@ import java.util.Set;
 import domain.enumeration.Categorie;
 import domain.enumeration.TypeTransaction;
 import application.service.interfaces.IServiceCategorie;
+import infrastructure.persistence.CategorieRepository;
 
 /*
     * ServiceCategorie porte les règles de gestion des catégories actives : savoir si une
     * catégorie est active, si un type de transaction a au moins une catégorie active, quelles
     * catégories restent disponibles à l'activation, et l'activation/désactivation elles-mêmes.
     * `Portefeuille.activerCategorie`/`desactiverCategorie` restent des méthodes structurelles
-    * (ajout/retrait dans un Set), mais déclencher la sauvegarde après coup est une
-    * responsabilité du service, jamais de l'entité.
+    * (ajout/retrait dans un Set), mais persister ce changement avant de l'appliquer en mémoire
+    * est une responsabilité du service, jamais de l'entité : il parle pour ça directement à
+    * CategorieRepository, plus par l'intermédiaire de ServicePortefeuille depuis l'étape
+    * repository.
 */
 public class ServiceCategorie implements IServiceCategorie{
     private final ServicePortefeuille servicePortefeuille;
+    private final CategorieRepository categorieRepository;
 
-    public ServiceCategorie(ServicePortefeuille servicePortefeuille) {
+    public ServiceCategorie(ServicePortefeuille servicePortefeuille, CategorieRepository categorieRepository) {
         this.servicePortefeuille = servicePortefeuille;
+        this.categorieRepository = categorieRepository;
     }
 
     boolean estActive(Categorie categorie) {
@@ -33,7 +38,7 @@ public class ServiceCategorie implements IServiceCategorie{
     }
 
     public void activerCategorie(Categorie categorie) {
-        servicePortefeuille.enregistrerActivationCategorie(categorie);
+        categorieRepository.activer(categorie);
         servicePortefeuille.getDonnees().activerCategorie(categorie);
     }
 
@@ -41,7 +46,7 @@ public class ServiceCategorie implements IServiceCategorie{
     // enregistrées avec cette catégorie. Portefeuille.desactiverCategorie ne fait que la
     // retirer de l'ensemble des catégories actives, jamais des transactions elles-mêmes.
     public void desactiverCategorie(Categorie categorie) {
-        servicePortefeuille.enregistrerDesactivationCategorie(categorie);
+        categorieRepository.desactiver(categorie);
         servicePortefeuille.getDonnees().desactiverCategorie(categorie);
     }
 

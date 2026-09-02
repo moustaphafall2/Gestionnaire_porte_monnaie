@@ -6,7 +6,10 @@ import presentation.controller.ControleurTransaction;
 import domain.entity.Portefeuille;
 import exception.ErreurChargementException;
 import exception.ErreurSauvegardeException;
-import infrastructure.persistence.GestionnairePostgreSQL;
+import infrastructure.persistence.CategorieRepository;
+import infrastructure.persistence.ChargeurPortefeuille;
+import infrastructure.persistence.EpargneRepository;
+import infrastructure.persistence.TransactionRepository;
 import application.service.implementation.ServiceCategorie;
 import application.service.implementation.ServiceEpargne;
 import application.service.implementation.ServicePortefeuille;
@@ -21,11 +24,11 @@ import presentation.view.VueTransaction;
 
 /*
     * Point d'entrée du programme. Son unique rôle est d'initialiser les objets nécessaires
-    * (GestionnairePostgreSQL, Portefeuille, les services, les vues, les contrôleurs), de tenir la
-    * boucle du menu principal et d'aiguiller chaque choix vers le contrôleur concerné. C'est ici,
-    * et seulement ici, que les dépendances entre services et contrôleurs sont reliées, et que
-    * plusieurs contrôleurs différents sont appelés depuis un même endroit — un contrôleur, lui,
-    * n'en appelle jamais un autre.
+    * (les repositories, ChargeurPortefeuille, Portefeuille, les services, les vues, les
+    * contrôleurs), de tenir la boucle du menu principal et d'aiguiller chaque choix vers le
+    * contrôleur concerné. C'est ici, et seulement ici, que les dépendances entre services et
+    * contrôleurs sont reliées, et que plusieurs contrôleurs différents sont appelés depuis un
+    * même endroit — un contrôleur, lui, n'en appelle jamais un autre.
     *
     * Chaque vue affiche son propre menu ou sous-menu et renvoie directement le choix lu
     * (VuePrincipale.demanderChoix(), VueCategorie.demanderChoixMenu(),
@@ -35,13 +38,17 @@ import presentation.view.VueTransaction;
     *
     * Depuis l'étape 6, un échec d'écriture (ErreurSauvegardeException) ne déclenche plus de
     * boucle de reprise : chaque service persiste avant de modifier la mémoire (voir
-    * ServicePortefeuille), donc un échec ne laisse plus rien en suspens à rattraper — l'opération
+    * ServiceTransaction, ServiceEpargne, ServiceCategorie et leur repository respectif depuis
+    * l'étape repository), donc un échec ne laisse plus rien en suspens à rattraper — l'opération
     * n'a simplement pas eu lieu, ni en base ni en mémoire. Main se contente d'afficher l'erreur et
     * de reprendre la boucle du menu.
 */
 public class Main {
     public static void main(String[] args) {
-        GestionnairePostgreSQL portefeuilleRepository = new GestionnairePostgreSQL();
+        CategorieRepository categorieRepository = new CategorieRepository();
+        TransactionRepository transactionRepository = new TransactionRepository();
+        EpargneRepository epargneRepository = new EpargneRepository();
+        ChargeurPortefeuille chargeurPortefeuille = new ChargeurPortefeuille(categorieRepository, transactionRepository, epargneRepository);
         VuePrincipale vuePrincipale = new VuePrincipale();
 
         // charger() absorbe déjà une base vide (premier lancement) en renvoyant un portefeuille
@@ -50,17 +57,17 @@ public class Main {
         // et on arrête proprement, jamais de trace d'exception brute.
         Portefeuille portefeuille;
         try {
-            portefeuille = portefeuilleRepository.charger();
+            portefeuille = chargeurPortefeuille.charger();
         } catch (ErreurChargementException erreur) {
             vuePrincipale.afficherErreur(erreur.getMessage());
             return;
         }
 
-        ServicePortefeuille servicePortefeuille = new ServicePortefeuille(portefeuille, portefeuilleRepository);
+        ServicePortefeuille servicePortefeuille = new ServicePortefeuille(portefeuille);
         ServiceSolde serviceSolde = new ServiceSolde(servicePortefeuille);
-        ServiceCategorie serviceCategorie = new ServiceCategorie(servicePortefeuille);
-        ServiceTransaction serviceTransaction = new ServiceTransaction(servicePortefeuille, serviceCategorie);
-        ServiceEpargne serviceEpargne = new ServiceEpargne(servicePortefeuille, serviceSolde);
+        ServiceCategorie serviceCategorie = new ServiceCategorie(servicePortefeuille, categorieRepository);
+        ServiceTransaction serviceTransaction = new ServiceTransaction(servicePortefeuille, serviceCategorie, transactionRepository);
+        ServiceEpargne serviceEpargne = new ServiceEpargne(servicePortefeuille, serviceSolde, epargneRepository);
         ServiceStatistique serviceStatistique = new ServiceStatistique(serviceTransaction);
 
         VueTransaction vueTransaction = new VueTransaction();

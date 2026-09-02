@@ -3404,3 +3404,175 @@ question de conception.
 Rien d'identifié pour cette sous-étape. `Dockerfile`/`.dockerignore` pour l'application
 elle-même restent à écrire (mentionnés en section 6 bis du cahier des charges), pas encore
 abordés.
+
+## 2026-09-02 — Étape 9 : mappers, la conversion entité vers DTO sort des services
+
+### Ce qui a été écrit
+
+Trois classes créées dans le nouveau paquet `application.mapper` :
+
+- `TransactionMapper` : `versDTO(Transaction)` et `versListeDTO(List<Transaction>)`.
+- `ObjectifMapper` : `versDTO(Epargne, double montantActuel, double pourcentageAtteint)`, sans
+  méthode de liste.
+- `MouvementMapper` : `versDTO(MouvementEpargne)`, sans méthode de liste.
+
+`ServiceTransaction` et `ServiceEpargne` sont modifiés en conséquence : leurs méthodes privées
+`versAffichage()` (une par DTO produit) sont supprimées, remplacées par des appels aux mappers
+correspondants. `ServiceStatistique` n'est pas touché : pas de mapper pour `StatistiqueDTO` (voir
+plus bas).
+
+`filtrerParDate()`, `filtrerParCategorie()` et `filtrerParType()` dans `ServiceTransaction`
+changent de forme : elles filtrent d'abord une liste de `Transaction`, puis confient la liste
+entière à `TransactionMapper.versListeDTO()`, au lieu de convertir un élément à la fois dans la
+même boucle que le filtre. Le résultat est identique, seule la boucle de conversion a changé
+d'adresse.
+
+### Choix de conception
+
+**`ObjectifMapper` n'a pas de `versListeDTO`.** Un mapper traduit, il ne calcule pas (règle
+posée dans `CLAUDE.md`) : `montantActuel` et `pourcentageAtteint` sont propres à chaque objectif
+et déjà calculés par `CalculEpargne` au moment de l'appel. Une méthode de liste devrait soit
+recalculer elle-même (interdit), soit recevoir des listes parallèles de valeurs à faire avancer
+en même temps que les objectifs — plus fragile qu'une boucle explicite. La boucle reste donc dans
+`ServiceEpargne.getObjectifs()`, qui appelle `ObjectifMapper.versDTO()` une fois par objectif.
+
+**`MouvementMapper` n'a pas non plus de `versListeDTO`, mais pour une raison différente** :
+cette conversion n'a qu'un seul appelant dans tout le projet (la boucle de
+`ServiceEpargne.getMouvements()`). Contrairement à `TransactionMapper` (quatre appelants réels
+pour la liste), une méthode de liste ici n'aurait aucun second usage. Décision de l'étudiant,
+en cours de sprint : la cohérence de forme avec `TransactionMapper` ne justifie pas à elle seule
+une méthode sans appelant — correction du plan initial, qui proposait la symétrie par défaut.
+
+**Pas de `StatistiqueMapper`.** `StatistiqueDTO` n'est pas la traduction d'une entité, c'est le
+résultat direct d'un calcul (agrégation sur une liste de `TransactionDTO`) : il n'y a rien à
+traduire, un mapper ne ferait que renvoyer `new StatistiqueDTO(...)`, sans logique propre.
+`ServiceStatistique` reste le seul service à construire son DTO directement — exception assumée,
+au même titre que l'absence de DTO pour les catégories et le solde.
+
+### Points à savoir défendre
+
+- **Pourquoi `TransactionMapper` a une méthode de liste et pas `ObjectifMapper` ?** Parce que
+  convertir une `Transaction` ne demande aucune valeur calculée : `versListeDTO` peut donc
+  boucler et convertir sans rien savoir d'autre. Convertir une `Epargne` demande deux valeurs
+  calculées différentes par objectif ; les faire porter par une méthode de liste romprait la
+  règle « le mapper ne calcule pas » ou obligerait à des listes parallèles fragiles.
+- **Pourquoi `ServiceEpargne` calcule encore `montantActuel`/`pourcentageAtteint` lui-même
+  après l'introduction du mapper ?** Parce que ce calcul n'a jamais été la responsabilité du
+  mapper. Le mapper ne fait que ranger des valeurs déjà connues dans un DTO ; le calcul reste
+  entièrement dans le service, via `CalculEpargne`, exactement comme avant.
+
+### Pièges rencontrés
+
+Aucun. La compilation est passée du premier coup après le branchement des trois mappers, et le
+scénario de bout en bout (dépense, historique complet, filtres par date/catégorie/type,
+modification amorcée, liste des objectifs, détail des mouvements, statistiques) n'a montré aucune
+différence de comportement par rapport à avant les mappers.
+
+### Reste à faire
+
+Les repositories par entité (étape 10), pas commencés : l'étudiant teste d'abord cette étape.
+
+Un point discuté avant d'écrire cette étape, à soumettre à la maîtresse de stage avant de
+continuer : avec un repository par entité, l'ordre « persister d'abord, muter la mémoire
+ensuite » ne sera plus visible d'un coup d'œil à un seul endroit (aujourd'hui, les huit méthodes
+`enregistrerXxx()` de `ServicePortefeuille`, dans un seul fichier). Chaque service
+(`ServiceTransaction`, `ServiceEpargne`, `ServiceCategorie`) devra respecter cet ordre séparément
+en appelant directement son propre repository, sans qu'un seul endroit du code ne le garantisse
+plus pour les trois à la fois. C'est le coût assumé de la séparation demandée — le bénéfice en
+face (une correction sur une table ne touche plus les fichiers des autres) reste net, mais le
+compromis mérite d'être posé explicitement plutôt que découvert plus tard.
+
+## 2026-09-02 — Étape 10 : un repository par entité
+
+### Ce qui a été écrit
+
+`GestionnairePostgreSQL` (tout le SQL des quatre tables dans un seul fichier) et
+`PortefeuilleRepository` (l'interface qu'elle implémentait) disparaissent, remplacés par quatre
+classes dans `infrastructure/persistence/`, à plat, **sans interface** — décision de la
+maîtresse de stage, pour ne pas doubler le nombre de fichiers alors qu'une seule implémentation
+existera jamais pour chacune :
+
+- `CategorieRepository` : `chargerActives()`, `activer()`, `desactiver()` — table
+  `categorie_active`.
+- `TransactionRepository` : `chargerToutes()`, `ajouter()`, `modifier()`, `supprimer()` — table
+  `transaction_financiere`.
+- `EpargneRepository` : `chargerTous()`, `ajouter()`, `supprimer()`, `ajouterMouvement()` —
+  tables `epargne` **et** `mouvement_epargne` (voir choix de conception).
+- `ChargeurPortefeuille` : fusion de `PortefeuilleRepository` et `GestionnairePostgreSQL`.
+  Reçoit les trois repositories au constructeur, sa seule méthode `charger()` les appelle et
+  assemble un `Portefeuille` neuf. Ne contient aucun SQL.
+
+`ServiceCategorie`, `ServiceTransaction` et `ServiceEpargne` reçoivent chacun son repository au
+constructeur et l'appellent directement pour toute écriture, à la place de
+`ServicePortefeuille.enregistrerXxx()`. `ServicePortefeuille` perd son second paramètre de
+constructeur et ses huit méthodes `enregistrerXxx()` (voir choix de conception).
+
+Corrections de commentaires au passage, dans `Portefeuille`, `ConnexionBaseDeDonnees` et
+`ErreurChargementException` : ils citaient encore `PortefeuilleRepository` ou
+`GestionnairePostgreSQL` par leur nom.
+
+### Choix de conception
+
+**Pas d'interface pour les quatre nouvelles classes de persistance.** Tranché par la maîtresse
+de stage. Conséquence directe pour `PortefeuilleRepository`, qui était une interface : la garder
+pour cette seule classe, pendant que les trois autres n'en ont pas, aurait été incohérent.
+Fusionnée avec son implémentation dans `ChargeurPortefeuille`, une classe concrète, au même titre
+que les trois repositories.
+
+**`mouvement_epargne` reste dans `EpargneRepository`, pas de repository séparé.** Un mouvement
+n'existe jamais sans son objectif (`objectif_id`, `ON DELETE CASCADE`) : il n'est ni lu ni écrit
+indépendamment nulle part dans le code. Un repository dédié forcerait `EpargneRepository` à en
+dépendre pour charger l'historique de chaque objectif — une couche de plus pour deux méthodes qui
+ne s'utilisent jamais l'une sans l'autre. Même raisonnement que celui déjà écrit dans
+`CLAUDE.md` pour exempter `MouvementEpargne` d'écran et de DTO propres.
+
+**`ServicePortefeuille` réduit au strict minimum forcé, pas à un choix de conception plus
+large.** Son constructeur ne prend plus que `Portefeuille` ; ses huit `enregistrerXxx()` ont
+disparu. Ce n'était pas optionnel : ils délégaient à `PortefeuilleRepository`, supprimée dans
+cette même étape, et appelaient des méthodes qui n'existent plus nulle part (redistribuées sous
+d'autres noms dans les trois repositories). Le code ne pouvait pas compiler autrement. Ce qui
+reste discutable et n'a pas été tranché — nom, rôle à plus long terme au-delà de « détenir
+`Portefeuille` et empêcher un contrôleur d'y accéder directement » — est laissé de côté, comme
+demandé.
+
+**L'ordre persister puis muter n'est plus visible à un seul endroit.** Annoncé avant d'écrire
+cette étape : chaque service (`ServiceCategorie`, `ServiceTransaction`, `ServiceEpargne`) tient
+maintenant cet ordre séparément, en appelant son propre repository avant de modifier
+`servicePortefeuille.getDonnees()`. Ce n'est plus visible d'un coup d'œil dans un seul fichier
+comme l'étaient les huit `enregistrerXxx()` de `ServicePortefeuille`. Concrètement, l'ordre est
+respecté à chacun des sept endroits suivants :
+
+- `ServiceCategorie.activerCategorie()` / `desactiverCategorie()` : `categorieRepository`
+  d'abord, `servicePortefeuille.getDonnees()` ensuite.
+- `ServiceTransaction.ajouterDepense()` / `ajouterRevenu()` / `modifierTransaction()` /
+  `supprimerTransaction()` : `transactionRepository` d'abord.
+- `ServiceEpargne.creerObjectif()` / `contribuerObjectif()` / `retirerObjectif()` /
+  `supprimerObjectif()` : `epargneRepository` d'abord.
+
+C'est le coût assumé de la séparation demandée, déjà signalé à la maîtresse de stage avant
+d'écrire cette étape.
+
+### Points à savoir défendre
+
+- **Pourquoi `ChargeurPortefeuille` ne contient-elle aucun SQL, contrairement à l'ancienne
+  `GestionnairePostgreSQL.charger()` ?** Parce que chaque repository sait déjà charger sa propre
+  table et traduire ses erreurs (`ErreurChargementException`). `ChargeurPortefeuille` n'a donc
+  plus qu'à assembler trois résultats déjà prêts dans un `Portefeuille` neuf — aucune connexion,
+  aucun `PreparedStatement` ne lui appartient.
+- **Pourquoi `EpargneRepository` touche deux tables alors que l'objectif de cette étape est
+  qu'une correction sur une table ne touche pas les autres ?** Parce que `mouvement_epargne` et
+  `epargne` ne sont pas deux préoccupations indépendantes : c'est une relation de composition
+  (un mouvement n'a aucun sens hors de son objectif), au même titre que `MouvementEpargne` vit
+  dans la liste d'`Epargne` côté domaine. Les trois autres tables (catégories, transactions,
+  objectifs) restent, elles, complètement indépendantes les unes des autres.
+
+### Pièges rencontrés
+
+Aucun. La compilation a échoué comme prévu à chaque étape intermédiaire (suppression de
+`PortefeuilleRepository` avant d'avoir fini de reporter ses appelants) — attendu, pas un
+imprévu : les erreurs du compilateur ont servi de liste de choses restant à faire.
+
+### Reste à faire
+
+Rien d'identifié pour cette étape. Le rôle final de `ServicePortefeuille` reste une question
+ouverte, à trancher avec la maîtresse de stage.

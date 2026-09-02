@@ -6,11 +6,14 @@ import java.util.List;
 
 import application.dto.MouvementDTO;
 import application.dto.ObjectifDTO;
+import application.mapper.MouvementMapper;
+import application.mapper.ObjectifMapper;
 import domain.entity.Epargne;
 import domain.entity.MouvementEpargne;
 import domain.enumeration.SensMouvement;
 import application.service.interfaces.IServiceEpargne;
 import application.service.interfaces.IServiceSolde;
+import infrastructure.persistence.EpargneRepository;
 
 /*
     * ServiceEpargne porte désormais toutes les règles de gestion des objectifs d'épargne :
@@ -27,22 +30,27 @@ import application.service.interfaces.IServiceSolde;
     * construit.
     *
     * Comme les autres services, il ne détient jamais Portefeuille directement : il passe par
-    * servicePortefeuille.getDonnees() pour lire ou modifier les objectifs, et par
-    * sauvegarder() pour écrire le résultat.
+    * servicePortefeuille.getDonnees() pour lire ou modifier les objectifs en mémoire, et depuis
+    * l'étape repository, directement par EpargneRepository (pas d'interface, décision de la
+    * maîtresse de stage) pour toute écriture — plus par l'intermédiaire de ServicePortefeuille.
     *
     * Depuis l'étape DTO, il ne renvoie plus jamais d'Epargne ni de MouvementEpargne à la
     * présentation : chaque méthode consultée par ControleurEpargne renvoie un ObjectifDTO ou un
-    * MouvementDTO, construit par versAffichage() juste avant de sortir du service.
+    * MouvementDTO. Depuis l'étape mapper, la construction elle-même ne se fait plus ici : ce
+    * service calcule montantActuel et pourcentageAtteint (ObjectifMapper ne calcule rien) et
+    * confie la traduction à ObjectifMapper et MouvementMapper.
     *
     * Depuis l'étape 5, le solde disponible (nécessaire à contribuerObjectif()) ne vient plus de
     * ServicePortefeuille mais de ServiceSolde, déclaré par son interface IServiceSolde : c'est
-    * le seul de ses deux besoins qui peut passer par une interface, l'autre (détenir/sauvegarder
-    * via getDonnees()) reste forcé de dépendre de la classe concrète ServicePortefeuille (voir
-    * le journal de développement pour la raison technique).
+    * le seul de ses trois dépendances qui passe par une interface, les deux autres
+    * (ServicePortefeuille pour détenir, EpargneRepository pour écrire) restent forcées de
+    * dépendre de classes concrètes (voir le journal de développement pour la raison technique de
+    * la première ; la seconde n'a simplement pas d'interface dans ce projet).
     *
-    * Depuis l'étape 6, l'identifiant d'un nouvel objectif vient de la base
-    * (servicePortefeuille.enregistrerNouvelObjectif()) : plus de compteur à combiner soi-même.
-    * Ordre systématique désormais : persister d'abord, construire ou muter la mémoire ensuite.
+    * Depuis l'étape repository, l'identifiant d'un nouvel objectif vient de
+    * EpargneRepository.ajouter() : plus de compteur à combiner soi-même. Ordre systématique
+    * désormais : persister d'abord (appel au repository), construire ou muter la mémoire
+    * ensuite.
 */
 public class ServiceEpargne implements IServiceEpargne {
     // Les montants sont des FCFA sans centimes, mais restent des double : deux montants
@@ -52,14 +60,17 @@ public class ServiceEpargne implements IServiceEpargne {
 
     private final ServicePortefeuille servicePortefeuille;
     private final IServiceSolde serviceSolde;
+    private final EpargneRepository epargneRepository;
 
-    public ServiceEpargne(ServicePortefeuille servicePortefeuille, IServiceSolde serviceSolde) {
+    public ServiceEpargne(ServicePortefeuille servicePortefeuille, IServiceSolde serviceSolde,
+            EpargneRepository epargneRepository) {
         this.servicePortefeuille = servicePortefeuille;
         this.serviceSolde = serviceSolde;
+        this.epargneRepository = epargneRepository;
     }
 
     // Montant actuellement épargné sur cet objectif. Le calcul passe par CalculEpargne, partagé
-    // avec ServicePortefeuille (getTotalEpargne), pour qu'il n'existe qu'à un seul endroit.
+    // avec ServiceSolde (getTotalEpargne), pour qu'il n'existe qu'à un seul endroit.
     // Privée : depuis l'étape DTO, plus aucun appelant hors de ce service n'a besoin du montant
     // actuel isolé, il arrive toujours déjà inclus dans un ObjectifDTO.
     private double getMontantActuel(Epargne objectif) {
@@ -92,7 +103,7 @@ public class ServiceEpargne implements IServiceEpargne {
     public List<ObjectifDTO> getObjectifs() {
         List<ObjectifDTO> resultat = new ArrayList<>();
         for (Epargne objectif : servicePortefeuille.getDonnees().getObjectifs()) {
-            resultat.add(versAffichage(objectif));
+            resultat.add(ObjectifMapper.versDTO(objectif, getMontantActuel(objectif), getPourcentageAtteint(objectif)));
         }
         return resultat;
     }
@@ -101,7 +112,8 @@ public class ServiceEpargne implements IServiceEpargne {
     // nom de l'objectif choisi avant de contribuer, retirer ou en afficher le détail. Renvoie le
     // DTO, jamais l'entité elle-même.
     public ObjectifDTO getObjectif(int idObjectif) {
-        return versAffichage(trouverObjectif(idObjectif));
+        Epargne objectif = trouverObjectif(idObjectif);
+        return ObjectifMapper.versDTO(objectif, getMontantActuel(objectif), getPourcentageAtteint(objectif));
     }
 
     // Mouvements (contributions et retraits) d'un objectif, pour l'écran détail. Anciennement
@@ -111,7 +123,7 @@ public class ServiceEpargne implements IServiceEpargne {
     public List<MouvementDTO> getMouvements(int idObjectif) {
         List<MouvementDTO> resultat = new ArrayList<>();
         for (MouvementEpargne mouvement : trouverObjectif(idObjectif).getMouvements()) {
-            resultat.add(versAffichage(mouvement));
+            resultat.add(MouvementMapper.versDTO(mouvement));
         }
         return resultat;
     }
@@ -127,19 +139,6 @@ public class ServiceEpargne implements IServiceEpargne {
             }
         }
         throw new IllegalArgumentException("Aucun objectif avec l'identifiant " + idObjectif + ".");
-    }
-
-    // Construit le DTO transmis à la présentation à partir d'une Epargne du domaine : une copie
-    // de ses champs, plus montantActuel et pourcentageAtteint déjà calculés (le DTO ne doit
-    // jamais recalculer quoi que ce soit lui-même).
-    private ObjectifDTO versAffichage(Epargne objectif) {
-        return new ObjectifDTO(objectif.getId(), objectif.getNom(), objectif.getMontantCible(),
-                getMontantActuel(objectif), getPourcentageAtteint(objectif));
-    }
-
-    // Même principe que versAffichage(Epargne), pour un mouvement.
-    private MouvementDTO versAffichage(MouvementEpargne mouvement) {
-        return new MouvementDTO(mouvement.getMontant(), mouvement.getSens(), mouvement.getDate());
     }
 
     // Anciennement Epargne.validerNom().
@@ -163,7 +162,7 @@ public class ServiceEpargne implements IServiceEpargne {
         validerNomObjectif(nom);
         validerMontantCible(montantCible);
 
-        int id = servicePortefeuille.enregistrerNouvelObjectif(nom, montantCible, dateLimite);
+        int id = epargneRepository.ajouter(nom, montantCible, dateLimite);
         Epargne objectif = new Epargne(id, nom, montantCible, dateLimite);
         servicePortefeuille.getDonnees().ajouterObjectif(objectif);
     }
@@ -214,7 +213,7 @@ public class ServiceEpargne implements IServiceEpargne {
         }
 
         Epargne objectif = trouverObjectif(idObjectif);
-        servicePortefeuille.enregistrerNouveauMouvement(idObjectif, montant, SensMouvement.CONTRIBUTION, date);
+        epargneRepository.ajouterMouvement(idObjectif, montant, SensMouvement.CONTRIBUTION, date);
         objectif.ajouterMouvement(new MouvementEpargne(montant, SensMouvement.CONTRIBUTION, date));
     }
 
@@ -231,7 +230,7 @@ public class ServiceEpargne implements IServiceEpargne {
             throw new IllegalStateException("Le montant du retrait ne peut pas dépasser le montant actuellement épargné.");
         }
 
-        servicePortefeuille.enregistrerNouveauMouvement(idObjectif, montant, SensMouvement.RETRAIT, date);
+        epargneRepository.ajouterMouvement(idObjectif, montant, SensMouvement.RETRAIT, date);
         objectif.ajouterMouvement(new MouvementEpargne(montant, SensMouvement.RETRAIT, date));
     }
 
@@ -244,7 +243,7 @@ public class ServiceEpargne implements IServiceEpargne {
             throw new IllegalStateException("L'objectif n'est pas vide (" + getMontantActuel(objectif)
                     + " FCFA restants), retirez d'abord les sommes épargnées.");
         }
-        servicePortefeuille.enregistrerSuppressionObjectif(idObjectif);
+        epargneRepository.supprimer(idObjectif);
         servicePortefeuille.getDonnees().retirerObjectif(objectif);
     }
 }

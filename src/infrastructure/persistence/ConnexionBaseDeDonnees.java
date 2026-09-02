@@ -14,8 +14,9 @@ import exception.ErreurChargementException;
 /*
     * ConnexionBaseDeDonnees ouvre la connexion JDBC vers PostgreSQL, à partir des paramètres lus
     * dans db.properties — jamais écrits en dur dans le code, voir db.properties.example à la
-    * racine du projet pour le modèle. Elle deviendra le point d'entrée que l'implémentation JDBC
-    * de PortefeuilleRepository appellera pour obtenir sa connexion.
+    * racine du projet pour le modèle. C'est le point d'entrée que chaque repository
+    * (CategorieRepository, TransactionRepository, EpargneRepository) appelle pour obtenir sa
+    * connexion, une par méthode.
     *
     * Le pilote PostgreSQL (lib/postgresql-42.7.4.jar) s'enregistre lui-même auprès de
     * DriverManager au chargement de la classe : mécanisme standard du JDBC depuis la version 4,

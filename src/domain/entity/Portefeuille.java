@@ -13,9 +13,9 @@ import domain.enumeration.Categorie;
     * les catégories actives et les objectifs d'épargne. Elle ne porte aucun calcul, aucune règle
     * de gestion, ni la moindre recherche : uniquement sa structure, et l'ajout/retrait dans ses
     * listes et son ensemble. Tous les calculs et recherches vivent dans
-    * application.service.implementation ; la persistance dans ServicePortefeuille, seul à
-    * détenir le PortefeuilleRepository et à transmettre chaque mutation validée vers
-    * GestionnairePostgreSQL.
+    * application.service.implementation ; la persistance dans les repositories
+    * d'infrastructure.persistence (CategorieRepository, TransactionRepository,
+    * EpargneRepository), que chaque service appelle directement.
     *
     * ajouterTransaction()/retirerTransaction(), ajouterObjectif()/retirerObjectif() et
     * activerCategorie()/desactiverCategorie() restent ici plutôt que de disparaître au profit
