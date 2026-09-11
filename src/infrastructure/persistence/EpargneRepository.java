@@ -1,5 +1,6 @@
 package infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -36,7 +37,7 @@ public class EpargneRepository {
                 Date dateLimiteSql = resultat.getDate("date_limite");
                 LocalDate dateLimite = (dateLimiteSql == null) ? null : dateLimiteSql.toLocalDate();
 
-                Epargne objectif = new Epargne(id, resultat.getString("nom"), resultat.getDouble("montant_cible"), dateLimite);
+                Epargne objectif = new Epargne(id, resultat.getString("nom"), resultat.getBigDecimal("montant_cible"), dateLimite);
                 chargerMouvements(connexion, objectif);
                 objectifs.add(objectif);
             }
@@ -56,7 +57,7 @@ public class EpargneRepository {
             try (ResultSet resultat = instruction.executeQuery()) {
                 while (resultat.next()) {
                     MouvementEpargne mouvement = new MouvementEpargne(
-                            resultat.getDouble("montant"),
+                            resultat.getBigDecimal("montant"),
                             SensMouvement.valueOf(resultat.getString("sens")),
                             resultat.getDate("date_mouvement").toLocalDate());
                     objectif.ajouterMouvement(mouvement);
@@ -67,12 +68,12 @@ public class EpargneRepository {
 
     // date_limite est facultative : setNull(..., Types.DATE) plutôt que setDate(..., null), qui
     // lèverait une NullPointerException.
-    public int ajouter(String nom, double montantCible, LocalDate dateLimite) {
+    public int ajouter(String nom, BigDecimal montantCible, LocalDate dateLimite) {
         String requete = "INSERT INTO epargne (nom, montant_cible, date_limite) VALUES (?, ?, ?) RETURNING id";
         try (Connection connexion = ConnexionBaseDeDonnees.ouvrir();
                 PreparedStatement instruction = connexion.prepareStatement(requete)) {
             instruction.setString(1, nom);
-            instruction.setDouble(2, montantCible);
+            instruction.setBigDecimal(2, montantCible);
             if (dateLimite == null) {
                 instruction.setNull(3, Types.DATE);
             } else {
@@ -100,12 +101,12 @@ public class EpargneRepository {
         }
     }
 
-    public void ajouterMouvement(int idObjectif, double montant, SensMouvement sens, LocalDate date) {
+    public void ajouterMouvement(int idObjectif, BigDecimal montant, SensMouvement sens, LocalDate date) {
         String requete = "INSERT INTO mouvement_epargne (objectif_id, montant, sens, date_mouvement) VALUES (?, ?, ?, ?)";
         try (Connection connexion = ConnexionBaseDeDonnees.ouvrir();
                 PreparedStatement instruction = connexion.prepareStatement(requete)) {
             instruction.setInt(1, idObjectif);
-            instruction.setDouble(2, montant);
+            instruction.setBigDecimal(2, montant);
             instruction.setString(3, sens.name());
             instruction.setDate(4, Date.valueOf(date));
             instruction.executeUpdate();

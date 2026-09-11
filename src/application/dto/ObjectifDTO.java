@@ -1,5 +1,7 @@
 package application.dto;
 
+import java.math.BigDecimal;
+
 /*
     * ObjectifDTO transporte vers la présentation exactement ce qu'un écran a besoin d'afficher
     * pour un objectif d'épargne : aucun calcul, aucune mise en forme, uniquement des données.
@@ -11,11 +13,11 @@ public class ObjectifDTO {
 
     private final int id;
     private final String nom;
-    private final double montantCible;
-    private final double montantActuel;
+    private final BigDecimal montantCible;
+    private final BigDecimal montantActuel;
     private final double pourcentageAtteint;
 
-    public ObjectifDTO(int id, String nom, double montantCible, double montantActuel, double pourcentageAtteint) {
+    public ObjectifDTO(int id, String nom, BigDecimal montantCible, BigDecimal montantActuel, double pourcentageAtteint) {
         this.id = id;
         this.nom = nom;
         this.montantCible = montantCible;
@@ -29,10 +31,10 @@ public class ObjectifDTO {
     public String getNom() {
         return nom;
     }
-    public double getMontantCible() {
+    public BigDecimal getMontantCible() {
         return montantCible;
     }
-    public double getMontantActuel() {
+    public BigDecimal getMontantActuel() {
         return montantActuel;
     }
     public double getPourcentageAtteint() {

@@ -1,5 +1,7 @@
 package presentation.view;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -42,12 +44,12 @@ public class VueConsole {
         }
     }
 
-    public double lireMontant(String message) {
+    public BigDecimal lireMontant(String message) {
         while (true) {
             String saisie = lireLigne(message).replace(",", ".");
             try {
-                double montant = Double.parseDouble(saisie);
-                if (montant <= 0) {
+                BigDecimal montant = new BigDecimal(saisie).setScale(2, RoundingMode.HALF_UP);
+                if (montant.compareTo(BigDecimal.ZERO) <= 0) {
                     afficherMessage("Le montant doit être strictement positif.");
                     continue;
                 }

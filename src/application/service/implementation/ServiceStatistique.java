@@ -1,5 +1,6 @@
 package application.service.implementation;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,9 +32,9 @@ public class ServiceStatistique implements IServiceStatistique {
 
     public StatistiqueDTO getStatistiques(LocalDate debut, LocalDate fin) {
         validerPeriode(debut, fin);
-        Map<Categorie, Double> totalParCategorie = new HashMap<>();
-        double totalRevenus = 0;
-        double totalDepenses = 0;
+        Map<Categorie, BigDecimal> totalParCategorie = new HashMap<>();
+        BigDecimal totalRevenus = BigDecimal.ZERO;
+        BigDecimal totalDepenses = BigDecimal.ZERO;
 
         for (TransactionDTO transaction : serviceTransaction.getHistorique()) {
             LocalDate date = transaction.getDate();
@@ -41,12 +42,12 @@ public class ServiceStatistique implements IServiceStatistique {
                 continue;
             }
             if (transaction.getType() == TypeTransaction.REVENU) {
-                totalRevenus += transaction.getMontant();
+                totalRevenus = totalRevenus.add(transaction.getMontant());
             } else {
                 Categorie categorie = transaction.getCategorie();
-                double totalActuel = totalParCategorie.getOrDefault(categorie, 0.0);
-                totalParCategorie.put(categorie, totalActuel + transaction.getMontant());
-                totalDepenses += transaction.getMontant();
+                BigDecimal totalActuel = totalParCategorie.getOrDefault(categorie, BigDecimal.ZERO);
+                totalParCategorie.put(categorie, totalActuel.add(transaction.getMontant()));
+                totalDepenses = totalDepenses.add(transaction.getMontant());
             }
         }
 

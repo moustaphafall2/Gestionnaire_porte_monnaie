@@ -1,5 +1,6 @@
 package domain.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import domain.enumeration.Categorie;
@@ -12,13 +13,13 @@ import domain.enumeration.TypeTransaction;
 public class Transaction {
 
     private int id;
-    private double montant;
+    private BigDecimal montant;
     private TypeTransaction type;
     private Categorie categorie;
     private LocalDate date;
     private String description;
 
-    public Transaction(int id, double montant, TypeTransaction type, Categorie categorie, LocalDate date,
+    public Transaction(int id, BigDecimal montant, TypeTransaction type, Categorie categorie, LocalDate date,
             String description)
     {
         this.id = id;
@@ -33,7 +34,7 @@ public class Transaction {
         return id;
     }
 
-    public double getMontant() {
+    public BigDecimal getMontant() {
         return montant;
     }
 
@@ -53,7 +54,7 @@ public class Transaction {
         return description;
     }
 
-    public void setMontant(double montant) {
+    public void setMontant(BigDecimal montant) {
         this.montant = montant;
     }
 

@@ -1,5 +1,6 @@
 package domain.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,11 +15,11 @@ public class Epargne {
 
     private int id;
     private String nom;
-    private double montantCible;
+    private BigDecimal montantCible;
     private LocalDate dateLimite;
     private List<MouvementEpargne> mouvements;
 
-    public Epargne(int id, String nom, double montantCible, LocalDate dateLimite) {
+    public Epargne(int id, String nom, BigDecimal montantCible, LocalDate dateLimite) {
         this.id = id;
         this.nom = nom;
         this.montantCible = montantCible;
@@ -32,7 +33,7 @@ public class Epargne {
     public String getNom() {
         return nom;
     }
-    public double getMontantCible() {
+    public BigDecimal getMontantCible() {
         return montantCible;
     }
     public LocalDate getDateLimite() {

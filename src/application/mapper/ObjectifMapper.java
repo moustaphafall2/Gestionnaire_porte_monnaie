@@ -1,5 +1,7 @@
 package application.mapper;
 
+import java.math.BigDecimal;
+
 import application.dto.ObjectifDTO;
 import domain.entity.Epargne;
 
@@ -13,7 +15,7 @@ public class ObjectifMapper {
     private ObjectifMapper() {
     }
 
-    public static ObjectifDTO versDTO(Epargne objectif, double montantActuel, double pourcentageAtteint) {
+    public static ObjectifDTO versDTO(Epargne objectif, BigDecimal montantActuel, double pourcentageAtteint) {
         return new ObjectifDTO(objectif.getId(), objectif.getNom(), objectif.getMontantCible(),
                 montantActuel, pourcentageAtteint);
     }

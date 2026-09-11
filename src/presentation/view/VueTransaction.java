@@ -1,5 +1,6 @@
 package presentation.view;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -36,11 +37,11 @@ public class VueTransaction extends VueConsole {
         }
     }
 
-    public double demanderMontantDepense() {
+    public BigDecimal demanderMontantDepense() {
         return lireMontant("Montant de la dépense : ");
     }
 
-    public double demanderMontantRevenu() {
+    public BigDecimal demanderMontantRevenu() {
         return lireMontant("Montant du revenu : ");
     }
 
@@ -53,11 +54,11 @@ public class VueTransaction extends VueConsole {
         return saisie.isEmpty() ? null : saisie;
     }
 
-    public void afficherRecapitulatif(double montant, Categorie categorie, LocalDate date) {
+    public void afficherRecapitulatif(BigDecimal montant, Categorie categorie, LocalDate date) {
         afficherMessage(String.format("Récapitulatif : %.2f FCFA, %s, le %s", montant, categorie.getLibelle(), date.format(FORMAT_DATE)));
     }
 
-    public void afficherAvertissementSoldeNegatif(double soldeApres) {
+    public void afficherAvertissementSoldeNegatif(BigDecimal soldeApres) {
         afficherMessage(String.format("Attention : cette dépense rendra votre solde négatif (nouveau solde : %.2f FCFA).", soldeApres));
     }
 
@@ -142,7 +143,7 @@ public class VueTransaction extends VueConsole {
         return lireEntier("Identifiant de la transaction à modifier (0 pour annuler) : ");
     }
 
-    public double demanderNouveauMontant() {
+    public BigDecimal demanderNouveauMontant() {
         return lireMontant("Nouveau montant : ");
     }
 

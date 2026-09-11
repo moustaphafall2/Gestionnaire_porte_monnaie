@@ -1,5 +1,6 @@
 package application.dto;
 
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.Map;
 
@@ -14,23 +15,23 @@ import domain.enumeration.Categorie;
 */
 public class StatistiqueDTO {
 
-    private final Map<Categorie, Double> totalParCategorie;
-    private final double totalRevenus;
-    private final double totalDepenses;
+    private final Map<Categorie, BigDecimal> totalParCategorie;
+    private final BigDecimal totalRevenus;
+    private final BigDecimal totalDepenses;
 
-    public StatistiqueDTO(Map<Categorie, Double> totalParCategorie, double totalRevenus, double totalDepenses) {
+    public StatistiqueDTO(Map<Categorie, BigDecimal> totalParCategorie, BigDecimal totalRevenus, BigDecimal totalDepenses) {
         this.totalParCategorie = totalParCategorie;
         this.totalRevenus = totalRevenus;
         this.totalDepenses = totalDepenses;
     }
 
-    public Map<Categorie, Double> getTotalParCategorie() {
+    public Map<Categorie, BigDecimal> getTotalParCategorie() {
         return Collections.unmodifiableMap(totalParCategorie);
     }
-    public double getTotalRevenus() {
+    public BigDecimal getTotalRevenus() {
         return totalRevenus;
     }
-    public double getTotalDepenses() {
+    public BigDecimal getTotalDepenses() {
         return totalDepenses;
     }
 }

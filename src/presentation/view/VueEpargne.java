@@ -1,5 +1,6 @@
 package presentation.view;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -66,7 +67,7 @@ public class VueEpargne extends VueConsole {
         return lireLigne("Nom de l'objectif : ");
     }
 
-    public double demanderMontantCible() {
+    public BigDecimal demanderMontantCible() {
         return lireMontant("Montant cible : ");
     }
 
@@ -85,7 +86,7 @@ public class VueEpargne extends VueConsole {
         }
     }
 
-    public void afficherRecapitulatifCreation(String nom, double montantCible) {
+    public void afficherRecapitulatifCreation(String nom, BigDecimal montantCible) {
         afficherMessage(String.format("Récapitulatif : \"%s\", cible %.2f FCFA", nom, montantCible));
     }
 
@@ -101,11 +102,11 @@ public class VueEpargne extends VueConsole {
         return lireEntier("Identifiant de l'objectif : ");
     }
 
-    public void afficherSoldeDisponible(double soldeDisponible) {
+    public void afficherSoldeDisponible(BigDecimal soldeDisponible) {
         afficherMessage(String.format("Solde disponible actuel : %.2f FCFA", soldeDisponible));
     }
 
-    public double demanderMontantContribution() {
+    public BigDecimal demanderMontantContribution() {
         return lireMontant("Montant à ajouter : ");
     }
 
@@ -117,7 +118,7 @@ public class VueEpargne extends VueConsole {
         afficherMessage("Attention : cette contribution dépassera le montant cible de l'objectif.");
     }
 
-    public void afficherRecapitulatifContribution(double montant, String nomObjectif, LocalDate date) {
+    public void afficherRecapitulatifContribution(BigDecimal montant, String nomObjectif, LocalDate date) {
         afficherMessage(String.format("Récapitulatif : %.2f FCFA vers \"%s\" le %s", montant, nomObjectif, date.format(FORMAT_DATE)));
     }
 
@@ -129,11 +130,11 @@ public class VueEpargne extends VueConsole {
         afficherMessage("Contribution enregistrée.");
     }
 
-    public double demanderMontantRetrait() {
+    public BigDecimal demanderMontantRetrait() {
         return lireMontant("Montant à retirer : ");
     }
 
-    public void afficherRecapitulatifRetrait(double montant, String nomObjectif, LocalDate date) {
+    public void afficherRecapitulatifRetrait(BigDecimal montant, String nomObjectif, LocalDate date) {
         afficherMessage(String.format("Récapitulatif : %.2f FCFA retirés de \"%s\" le %s", montant, nomObjectif, date.format(FORMAT_DATE)));
     }
 

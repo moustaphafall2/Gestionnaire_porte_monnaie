@@ -1,5 +1,6 @@
 package application.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import domain.enumeration.SensMouvement;
@@ -12,17 +13,17 @@ import domain.enumeration.SensMouvement;
 */
 public class MouvementDTO {
 
-    private final double montant;
+    private final BigDecimal montant;
     private final SensMouvement sens;
     private final LocalDate date;
 
-    public MouvementDTO(double montant, SensMouvement sens, LocalDate date) {
+    public MouvementDTO(BigDecimal montant, SensMouvement sens, LocalDate date) {
         this.montant = montant;
         this.sens = sens;
         this.date = date;
     }
 
-    public double getMontant() {
+    public BigDecimal getMontant() {
         return montant;
     }
     public SensMouvement getSens() {

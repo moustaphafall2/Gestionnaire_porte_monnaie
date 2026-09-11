@@ -1,5 +1,6 @@
 package application.service.interfaces;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -9,9 +10,9 @@ import domain.enumeration.TypeTransaction;
 
 public interface IServiceTransaction {
 
-    public void ajouterDepense(double montant, Categorie categorie, LocalDate date, String description);
-    public void ajouterRevenu(double montant, Categorie categorie, LocalDate date, String description);
-    public void modifierTransaction(int id, double nouveauMontant, Categorie nouvelleCategorie, LocalDate nouvelleDate, String nouvelleDescription);
+    public void ajouterDepense(BigDecimal montant, Categorie categorie, LocalDate date, String description);
+    public void ajouterRevenu(BigDecimal montant, Categorie categorie, LocalDate date, String description);
+    public void modifierTransaction(int id, BigDecimal nouveauMontant, Categorie nouvelleCategorie, LocalDate nouvelleDate, String nouvelleDescription);
     public void supprimerTransaction(int id);
     public TransactionDTO getTransaction(int id);
     public List<TransactionDTO> getHistorique();

@@ -1,5 +1,6 @@
 package application.service.implementation;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,11 +23,6 @@ import infrastructure.persistence.EpargneRepository;
     * MouvementMapper.
 */
 public class ServiceEpargne implements IServiceEpargne {
-    // Les montants sont des FCFA sans centimes, mais restent des double : deux montants
-    // "égaux" en théorie peuvent différer d'une poussière après une suite d'additions/
-    // soustractions. On compare donc à un epsilon près plutôt qu'avec ==.
-    private static final double EPSILON = 0.01;
-
     private final ServicePortefeuille servicePortefeuille;
     private final IServiceSolde serviceSolde;
     private final EpargneRepository epargneRepository;
@@ -38,21 +34,23 @@ public class ServiceEpargne implements IServiceEpargne {
         this.epargneRepository = epargneRepository;
     }
 
-    private double getMontantActuel(Epargne objectif) {
+    private BigDecimal getMontantActuel(Epargne objectif) {
         return CalculEpargne.calculerMontantActuel(objectif);
     }
 
     private double getPourcentageAtteint(Epargne objectif) {
-        return (getMontantActuel(objectif) / objectif.getMontantCible()) * 100;
+        return (getMontantActuel(objectif).doubleValue() / objectif.getMontantCible().doubleValue()) * 100;
     }
 
-    public boolean depasseraCible(int idObjectif, double montant) {
+    public boolean depasseraCible(int idObjectif, BigDecimal montant) {
         Epargne objectif = trouverObjectif(idObjectif);
-        return getMontantActuel(objectif) + montant > objectif.getMontantCible();
+        return getMontantActuel(objectif).add(montant).compareTo(objectif.getMontantCible()) > 0;
     }
 
+    // BigDecimal à échelle fixe ne dérive pas comme un double : un objectif vide vaut
+    // exactement zéro, pas besoin d'un epsilon.
     private boolean estVide(Epargne objectif) {
-        return Math.abs(getMontantActuel(objectif)) < EPSILON;
+        return getMontantActuel(objectif).compareTo(BigDecimal.ZERO) == 0;
     }
 
     public List<ObjectifDTO> getObjectifs() {
@@ -91,13 +89,13 @@ public class ServiceEpargne implements IServiceEpargne {
         }
     }
 
-    private void validerMontantCible(double montantCible) {
-        if (montantCible <= 0) {
+    private void validerMontantCible(BigDecimal montantCible) {
+        if (montantCible.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Le montant cible doit être strictement positif.");
         }
     }
 
-    public void creerObjectif(String nom, double montantCible, LocalDate dateLimite) {
+    public void creerObjectif(String nom, BigDecimal montantCible, LocalDate dateLimite) {
         validerNomObjectif(nom);
         validerMontantCible(montantCible);
 
@@ -106,8 +104,8 @@ public class ServiceEpargne implements IServiceEpargne {
         servicePortefeuille.getDonnees().ajouterObjectif(objectif);
     }
 
-    private void validerMontantMouvement(double montant) {
-        if (montant <= 0) {
+    private void validerMontantMouvement(BigDecimal montant) {
+        if (montant.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Le montant doit être strictement positif.");
         }
     }
@@ -129,13 +127,13 @@ public class ServiceEpargne implements IServiceEpargne {
 
     // Un objectif d'épargne fonctionne comme un coffre : refusée si le montant dépasse le solde
     // disponible.
-    public void contribuerObjectif(int idObjectif, double montant, LocalDate date) {
+    public void contribuerObjectif(int idObjectif, BigDecimal montant, LocalDate date) {
         validerMontantMouvement(montant);
         validerSensMouvement(SensMouvement.CONTRIBUTION);
         validerDateMouvement(date);
 
-        double soldeDisponible = serviceSolde.getSoldeDisponible();
-        if (montant > soldeDisponible) {
+        BigDecimal soldeDisponible = serviceSolde.getSoldeDisponible();
+        if (montant.compareTo(soldeDisponible) > 0) {
             throw new IllegalStateException("Le montant de la contribution dépasse le solde disponible ("
                     + soldeDisponible + " FCFA).");
         }
@@ -146,13 +144,13 @@ public class ServiceEpargne implements IServiceEpargne {
     }
 
     // Refusé si le montant dépasse ce qui est réellement épargné.
-    public void retirerObjectif(int idObjectif, double montant, LocalDate date) {
+    public void retirerObjectif(int idObjectif, BigDecimal montant, LocalDate date) {
         validerMontantMouvement(montant);
         validerSensMouvement(SensMouvement.RETRAIT);
         validerDateMouvement(date);
 
         Epargne objectif = trouverObjectif(idObjectif);
-        if (montant > getMontantActuel(objectif)) {
+        if (montant.compareTo(getMontantActuel(objectif)) > 0) {
             throw new IllegalStateException("Le montant du retrait ne peut pas dépasser le montant actuellement épargné.");
         }
 

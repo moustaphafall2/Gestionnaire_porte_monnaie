@@ -1,5 +1,6 @@
 package application.service.implementation;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -43,8 +44,8 @@ public class ServiceTransaction implements IServiceTransaction {
         }
     }
 
-    private void validerMontant(double montant) {
-        if (montant <= 0) {
+    private void validerMontant(BigDecimal montant) {
+        if (montant.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Le montant doit être strictement positif.");
         }
     }
@@ -79,7 +80,7 @@ public class ServiceTransaction implements IServiceTransaction {
         return description == null ? "" : description;
     }
 
-    public void ajouterDepense(double montant, Categorie categorie, LocalDate date, String description) {
+    public void ajouterDepense(BigDecimal montant, Categorie categorie, LocalDate date, String description) {
         validerCategorieActive(categorie);
         validerMontant(montant);
         validerType(TypeTransaction.DEPENSE);
@@ -93,7 +94,7 @@ public class ServiceTransaction implements IServiceTransaction {
         servicePortefeuille.getDonnees().ajouterTransaction(depense);
     }
 
-    public void ajouterRevenu(double montant, Categorie categorie, LocalDate date, String description) {
+    public void ajouterRevenu(BigDecimal montant, Categorie categorie, LocalDate date, String description) {
         validerCategorieActive(categorie);
         validerMontant(montant);
         validerType(TypeTransaction.REVENU);
@@ -107,7 +108,7 @@ public class ServiceTransaction implements IServiceTransaction {
         servicePortefeuille.getDonnees().ajouterTransaction(revenu);
     }
 
-    public void modifierTransaction(int id, double nouveauMontant, Categorie nouvelleCategorie, LocalDate nouvelleDate, String nouvelleDescription) {
+    public void modifierTransaction(int id, BigDecimal nouveauMontant, Categorie nouvelleCategorie, LocalDate nouvelleDate, String nouvelleDescription) {
         validerCategorieActive(nouvelleCategorie);
         Transaction transaction = trouverTransaction(id);
         validerMontant(nouveauMontant);

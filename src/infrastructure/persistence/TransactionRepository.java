@@ -1,5 +1,6 @@
 package infrastructure.persistence;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
@@ -31,7 +32,7 @@ public class TransactionRepository {
                 // à la main.
                 transactions.add(new Transaction(
                         resultat.getInt("id"),
-                        resultat.getDouble("montant"),
+                        resultat.getBigDecimal("montant"),
                         TypeTransaction.valueOf(resultat.getString("type")),
                         Categorie.valueOf(resultat.getString("categorie")),
                         resultat.getDate("date_transaction").toLocalDate(),
@@ -45,12 +46,12 @@ public class TransactionRepository {
 
     // RETURNING id : PostgreSQL renvoie l'identifiant généré par la colonne SERIAL directement
     // dans le résultat de l'INSERT.
-    public int ajouter(double montant, TypeTransaction type, Categorie categorie, LocalDate date, String description) {
+    public int ajouter(BigDecimal montant, TypeTransaction type, Categorie categorie, LocalDate date, String description) {
         String requete = "INSERT INTO transaction_financiere (montant, type, categorie, date_transaction, description) "
                 + "VALUES (?, ?, ?, ?, ?) RETURNING id";
         try (Connection connexion = ConnexionBaseDeDonnees.ouvrir();
                 PreparedStatement instruction = connexion.prepareStatement(requete)) {
-            instruction.setDouble(1, montant);
+            instruction.setBigDecimal(1, montant);
             instruction.setString(2, type.name());
             instruction.setString(3, categorie.name());
             instruction.setDate(4, Date.valueOf(date));
@@ -64,11 +65,11 @@ public class TransactionRepository {
         }
     }
 
-    public void modifier(int id, double montant, Categorie categorie, LocalDate date, String description) {
+    public void modifier(int id, BigDecimal montant, Categorie categorie, LocalDate date, String description) {
         String requete = "UPDATE transaction_financiere SET montant = ?, categorie = ?, date_transaction = ?, description = ? WHERE id = ?";
         try (Connection connexion = ConnexionBaseDeDonnees.ouvrir();
                 PreparedStatement instruction = connexion.prepareStatement(requete)) {
-            instruction.setDouble(1, montant);
+            instruction.setBigDecimal(1, montant);
             instruction.setString(2, categorie.name());
             instruction.setDate(3, Date.valueOf(date));
             instruction.setString(4, description);

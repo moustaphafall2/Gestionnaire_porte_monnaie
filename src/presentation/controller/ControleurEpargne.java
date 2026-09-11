@@ -1,5 +1,6 @@
 package presentation.controller;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import application.dto.ObjectifDTO;
@@ -24,7 +25,7 @@ public class ControleurEpargne {
 
     public void creerObjectif() {
         String nom = vueEpargne.demanderNomObjectif();
-        double montantCible = vueEpargne.demanderMontantCible();
+        BigDecimal montantCible = vueEpargne.demanderMontantCible();
         LocalDate dateLimite = vueEpargne.demanderDateLimite();
 
         vueEpargne.afficherRecapitulatifCreation(nom, montantCible);
@@ -49,7 +50,7 @@ public class ControleurEpargne {
             ObjectifDTO objectif = serviceEpargne.getObjectif(id);
 
             vueEpargne.afficherSoldeDisponible(serviceSolde.getSoldeDisponible());
-            double montant = vueEpargne.demanderMontantContribution();
+            BigDecimal montant = vueEpargne.demanderMontantContribution();
 
             // Règle de gestion : un dépassement de la cible n'est pas une erreur, simple signalement.
             if (serviceEpargne.depasseraCible(id, montant)) {
@@ -77,7 +78,7 @@ public class ControleurEpargne {
         try {
             ObjectifDTO objectif = serviceEpargne.getObjectif(id);
 
-            double montant = vueEpargne.demanderMontantRetrait();
+            BigDecimal montant = vueEpargne.demanderMontantRetrait();
             LocalDate date = vueEpargne.demanderDate();
             vueEpargne.afficherRecapitulatifRetrait(montant, objectif.getNom(), date);
             if (!vueEpargne.demanderConfirmationRetrait()) {

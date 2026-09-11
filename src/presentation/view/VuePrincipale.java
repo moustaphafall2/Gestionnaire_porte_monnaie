@@ -1,5 +1,7 @@
 package presentation.view;
 
+import java.math.BigDecimal;
+
 /*
     * VuePrincipale affiche le menu principal et l'écran "voir le solde".
 */
@@ -23,7 +25,7 @@ public class VuePrincipale extends VueConsole {
         return lireEntier("Votre choix : ");
     }
 
-    public void afficherSolde(double soldeDisponible, double totalEpargne) {
+    public void afficherSolde(BigDecimal soldeDisponible, BigDecimal totalEpargne) {
         afficherMessage(String.format("Solde disponible : %.2f FCFA", soldeDisponible));
         afficherMessage(String.format("Total épargné : %.2f FCFA", totalEpargne));
     }

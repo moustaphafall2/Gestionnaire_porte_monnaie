@@ -1,5 +1,7 @@
 package application.service.implementation;
 
+import java.math.BigDecimal;
+
 import domain.entity.Epargne;
 import domain.entity.MouvementEpargne;
 import domain.enumeration.SensMouvement;
@@ -14,18 +16,18 @@ public class CalculEpargne {
     }
 
     // Règle de gestion : jamais stocké, toujours recalculé à partir des mouvements.
-    static double calculerMontantActuel(Epargne objectif) {
-        double sommeContributions = 0;
-        double sommeRetraits = 0;
+    static BigDecimal calculerMontantActuel(Epargne objectif) {
+        BigDecimal sommeContributions = BigDecimal.ZERO;
+        BigDecimal sommeRetraits = BigDecimal.ZERO;
 
         for (MouvementEpargne mouvement : objectif.getMouvements()) {
             if (mouvement.getSens() == SensMouvement.CONTRIBUTION) {
-                sommeContributions += mouvement.getMontant();
+                sommeContributions = sommeContributions.add(mouvement.getMontant());
             } else {
-                sommeRetraits += mouvement.getMontant();
+                sommeRetraits = sommeRetraits.add(mouvement.getMontant());
             }
         }
 
-        return sommeContributions - sommeRetraits;
+        return sommeContributions.subtract(sommeRetraits);
     }
 }

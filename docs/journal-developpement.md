@@ -3676,3 +3676,82 @@ Aucun.
 ### Reste à faire
 
 Rien d'identifié.
+
+## 2026-09-11 — Migration des montants de `double` vers `BigDecimal`
+
+### Ce qui a été écrit
+
+Tous les champs représentant un montant en FCFA passent de `double` à `BigDecimal`, sur les
+cinq couches touchées par un montant :
+
+- **Domaine** : `Transaction.montant`, `Epargne.montantCible`, `MouvementEpargne.montant`.
+- **DTO** : `TransactionDTO.montant`, `ObjectifDTO.montantCible`/`montantActuel`,
+  `MouvementDTO.montant`, et les trois champs de `StatistiqueDTO`
+  (`totalParCategorie`, `totalRevenus`, `totalDepenses`).
+- **Mapper** : `ObjectifMapper.versDTO()`, qui reçoit maintenant `montantActuel` en `BigDecimal`.
+- **Services** : `ServiceTransaction`, `ServiceEpargne`, `CalculEpargne`, `ServiceSolde`,
+  `ServiceStatistique`, et les interfaces `IServiceTransaction`, `IServiceEpargne`,
+  `IServiceSolde` qui déclarent leurs méthodes.
+- **Persistance** : `TransactionRepository` et `EpargneRepository` passent de
+  `setDouble`/`getDouble` à `setBigDecimal`/`getBigDecimal`.
+- **Présentation** : `VueConsole.lireMontant()`, `VueTransaction`, `VueEpargne`,
+  `VueStatistique`, `VuePrincipale`, et les contrôleurs `ControleurTransaction`,
+  `ControleurEpargne`, `ControleurPortefeuille`.
+
+Seul `ObjectifDTO.pourcentageAtteint` reste en `double` : c'est un ratio d'affichage calculé
+pour l'écran, pas un montant d'argent.
+
+### Choix de conception
+
+**Pourquoi `BigDecimal` plutôt que `double` pour de l'argent.** Un `double` est une
+approximation binaire : des additions et soustractions répétées (les mouvements d'épargne, le
+calcul du solde) accumulent une erreur d'arrondi invisible à l'affichage mais réelle en mémoire.
+`BigDecimal` représente une valeur décimale exacte, ce qui a rendu inutile
+`ServiceEpargne.EPSILON` : ce seuil ne servait qu'à comparer deux `double` "à peu près nuls" à
+cause de cette dérive. `estVide()` compare maintenant directement
+`getMontantActuel(objectif).compareTo(BigDecimal.ZERO) == 0`.
+
+**Pourquoi l'échelle reste à 2 décimales alors que le FCFA n'a pas de centimes.** Passer à
+l'échelle 0 aurait demandé de changer le schéma SQL (`NUMERIC(12,2)` → `NUMERIC(12,0)`) sans
+apporter de garantie supplémentaire : décision de l'étudiant, prise pour rester cohérent avec ce
+qui existe déjà en base plutôt que de rouvrir le schéma pour un gain surtout cosmétique.
+
+**Pourquoi `pourcentageAtteint` reste en `double`.** C'est une valeur calculée uniquement pour
+l'affichage (une barre de progression en pourcentage), jamais stockée ni comparée à un seuil
+métier : le risque d'imprécision du `double` n'a aucune conséquence ici, contrairement à un
+montant qui s'accumule au fil des mouvements.
+
+**Pourquoi `lireMontant()` force l'échelle à la saisie.** `new BigDecimal(saisie)` construit un
+nombre à l'échelle exacte du texte tapé : une saisie "1000.999" produirait un `BigDecimal` à 3
+décimales, incohérent avec la colonne `NUMERIC(12,2)`. `setScale(2, RoundingMode.HALF_UP)`
+normalise dès la saisie plutôt que de laisser PostgreSQL arrondir silencieusement à
+l'insertion.
+
+**Pourquoi les `String.format("%.2f", ...)` n'ont pas changé.** Le formateur de Java sait
+directement mettre en forme un `BigDecimal` avec le spécificateur `%f`, exactement comme un
+`double`. Aucune vue n'a eu besoin d'adapter sa mise en forme, seulement le type des paramètres
+qu'elle reçoit.
+
+### Points à savoir défendre
+
+- **Pourquoi `montant <= 0` devient `montant.compareTo(BigDecimal.ZERO) <= 0` ?**
+  `BigDecimal` est un objet, pas un type primitif : Java n'autorise pas les opérateurs de
+  comparaison (`<`, `>`, `<=`, `>=`) dessus. `compareTo()` renvoie un entier négatif, nul ou
+  positif selon que la valeur est plus petite, égale ou plus grande.
+- **Pourquoi ne jamais comparer deux montants avec `equals()` ?** `BigDecimal.equals()` compare
+  aussi l'échelle : `10.0` et `10.00` sont `equals() == false` bien qu'ils représentent le même
+  montant. Seul `compareTo() == 0` compare la valeur numérique réelle, indépendamment de
+  l'échelle.
+- **Pourquoi l'accumulation `total += montant` devient `total = total.add(montant)` ?**
+  `BigDecimal` est immuable : aucune méthode ne modifie l'instance sur laquelle elle est
+  appelée, `add()` renvoie toujours un nouvel objet qu'il faut réaffecter.
+
+### Pièges rencontrés
+
+Aucun. Compilation propre du projet entier après la migration des cinq couches.
+
+### Reste à faire
+
+Tester à la main : une dépense et une contribution avec des centimes, un retrait qui vide
+exactement un objectif (pour confirmer que `estVide()` fonctionne sans l'ancien epsilon), et une
+saisie de montant invalide ou à plus de deux décimales ("abc", "-5", "12,999").

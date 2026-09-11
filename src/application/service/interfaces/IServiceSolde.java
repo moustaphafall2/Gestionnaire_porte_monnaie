@@ -1,9 +1,11 @@
 package application.service.interfaces;
 
+import java.math.BigDecimal;
+
 public interface IServiceSolde {
 
-    public double getSoldeDisponible();
-    public double getTotalEpargne();
-    public double soldeApresDepense(double montant);
-    public boolean depenseRendraSoldeNegatif(double montant);
+    public BigDecimal getSoldeDisponible();
+    public BigDecimal getTotalEpargne();
+    public BigDecimal soldeApresDepense(BigDecimal montant);
+    public boolean depenseRendraSoldeNegatif(BigDecimal montant);
 }

@@ -1,5 +1,6 @@
 package presentation.controller;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import domain.enumeration.Categorie;
@@ -35,7 +36,7 @@ public class ControleurTransaction {
         }
 
         Categorie categorie = vueTransaction.demanderCategorie(serviceCategorie.getCategoriesActivesDeType(TypeTransaction.DEPENSE));
-        double montant = vueTransaction.demanderMontantDepense();
+        BigDecimal montant = vueTransaction.demanderMontantDepense();
         LocalDate date = vueTransaction.demanderDate();
         String description = vueTransaction.demanderDescription();
 
@@ -62,7 +63,7 @@ public class ControleurTransaction {
         }
 
         Categorie categorie = vueTransaction.demanderCategorie(serviceCategorie.getCategoriesActivesDeType(TypeTransaction.REVENU));
-        double montant = vueTransaction.demanderMontantRevenu();
+        BigDecimal montant = vueTransaction.demanderMontantRevenu();
         LocalDate date = vueTransaction.demanderDate();
         String description = vueTransaction.demanderDescription();
 
@@ -109,7 +110,7 @@ public class ControleurTransaction {
                 return;
             }
 
-            double montant = vueTransaction.demanderNouveauMontant();
+            BigDecimal montant = vueTransaction.demanderNouveauMontant();
             LocalDate date = vueTransaction.demanderNouvelleDate();
             Categorie categorie = vueTransaction.demanderCategorie(serviceCategorie.getCategoriesActivesDeType(type));
             String description = vueTransaction.demanderNouvelleDescription();

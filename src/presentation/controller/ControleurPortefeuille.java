@@ -1,5 +1,7 @@
 package presentation.controller;
 
+import java.math.BigDecimal;
+
 import application.service.interfaces.IServiceSolde;
 import presentation.view.VuePrincipale;
 
@@ -17,8 +19,8 @@ public class ControleurPortefeuille {
     }
 
     public void afficherSolde() {
-        double soldeDisponible = serviceSolde.getSoldeDisponible();
-        double totalEpargne = serviceSolde.getTotalEpargne();
+        BigDecimal soldeDisponible = serviceSolde.getSoldeDisponible();
+        BigDecimal totalEpargne = serviceSolde.getTotalEpargne();
         vuePrincipale.afficherSolde(soldeDisponible, totalEpargne);
     }
 }

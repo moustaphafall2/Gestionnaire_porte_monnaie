@@ -1,5 +1,7 @@
 package application.service.implementation;
 
+import java.math.BigDecimal;
+
 import domain.entity.Epargne;
 import domain.entity.Transaction;
 import domain.enumeration.TypeTransaction;
@@ -19,34 +21,34 @@ public class ServiceSolde implements IServiceSolde {
 
     // Règle de gestion : solde disponible = total des revenus - total des dépenses - total
     // actuellement épargné.
-    public double getSoldeDisponible() {
-        double totalRevenus = 0;
-        double totalDepenses = 0;
+    public BigDecimal getSoldeDisponible() {
+        BigDecimal totalRevenus = BigDecimal.ZERO;
+        BigDecimal totalDepenses = BigDecimal.ZERO;
 
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             if (transaction.getType() == TypeTransaction.REVENU) {
-                totalRevenus += transaction.getMontant();
+                totalRevenus = totalRevenus.add(transaction.getMontant());
             } else {
-                totalDepenses += transaction.getMontant();
+                totalDepenses = totalDepenses.add(transaction.getMontant());
             }
         }
 
-        return totalRevenus - totalDepenses - getTotalEpargne();
+        return totalRevenus.subtract(totalDepenses).subtract(getTotalEpargne());
     }
 
-    public double getTotalEpargne() {
-        double total = 0;
+    public BigDecimal getTotalEpargne() {
+        BigDecimal total = BigDecimal.ZERO;
         for (Epargne objectif : servicePortefeuille.getDonnees().getObjectifs()) {
-            total += CalculEpargne.calculerMontantActuel(objectif);
+            total = total.add(CalculEpargne.calculerMontantActuel(objectif));
         }
         return total;
     }
 
-    public double soldeApresDepense(double montant) {
-        return getSoldeDisponible() - montant;
+    public BigDecimal soldeApresDepense(BigDecimal montant) {
+        return getSoldeDisponible().subtract(montant);
     }
 
-    public boolean depenseRendraSoldeNegatif(double montant) {
-        return soldeApresDepense(montant) < 0;
+    public boolean depenseRendraSoldeNegatif(BigDecimal montant) {
+        return soldeApresDepense(montant).compareTo(BigDecimal.ZERO) < 0;
     }
 }

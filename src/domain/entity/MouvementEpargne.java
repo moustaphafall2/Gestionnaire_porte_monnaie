@@ -1,5 +1,6 @@
 package domain.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import domain.enumeration.SensMouvement;
@@ -10,18 +11,18 @@ import domain.enumeration.SensMouvement;
 */
 public class MouvementEpargne {
 
-    private double montant;
+    private BigDecimal montant;
     private SensMouvement sens;
     private LocalDate date;
 
-    public MouvementEpargne(double montant, SensMouvement sens, LocalDate date)
+    public MouvementEpargne(BigDecimal montant, SensMouvement sens, LocalDate date)
     {
         this.montant = montant;
         this.sens = sens;
         this.date = date;
     }
 
-    public double getMontant() {
+    public BigDecimal getMontant() {
         return montant;
     }
     public SensMouvement getSens() {

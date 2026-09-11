@@ -1,5 +1,6 @@
 package application.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import domain.enumeration.Categorie;
@@ -15,13 +16,13 @@ import domain.enumeration.TypeTransaction;
 public class TransactionDTO {
 
     private final int id;
-    private final double montant;
+    private final BigDecimal montant;
     private final TypeTransaction type;
     private final Categorie categorie;
     private final LocalDate date;
     private final String description;
 
-    public TransactionDTO(int id, double montant, TypeTransaction type, Categorie categorie, LocalDate date,
+    public TransactionDTO(int id, BigDecimal montant, TypeTransaction type, Categorie categorie, LocalDate date,
             String description) {
         this.id = id;
         this.montant = montant;
@@ -34,7 +35,7 @@ public class TransactionDTO {
     public int getId() {
         return id;
     }
-    public double getMontant() {
+    public BigDecimal getMontant() {
         return montant;
     }
     public TypeTransaction getType() {
