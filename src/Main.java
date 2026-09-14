@@ -24,8 +24,8 @@ import presentation.view.VueTransaction;
 
 /*
     * Point d'entrée du programme : initialise les repositories, le portefeuille, les services,
-    * les vues et les contrôleurs, tient la boucle du menu principal et aiguille chaque choix vers
-    * le contrôleur concerné. Seul endroit du projet où ces dépendances sont reliées entre elles.
+    * les vues et les contrôleurs, puis délègue la navigation à lancerBoucleMenu. Seul endroit du
+    * projet où ces dépendances sont reliées entre elles.
 */
 public class Main {
     public static void main(String[] args) {
@@ -62,6 +62,15 @@ public class Main {
         ControleurCategorie controleurCategorie = new ControleurCategorie(vueCategorie, serviceCategorie);
         ControleurStatistique controleurStatistique = new ControleurStatistique(vueStatistique, serviceStatistique);
 
+        lancerBoucleMenu(vuePrincipale, controleurPortefeuille, controleurTransaction, vueTransaction,
+                controleurEpargne, vueEpargne, controleurCategorie, vueCategorie, serviceCategorie,
+                controleurStatistique);
+    }
+
+    private static void lancerBoucleMenu(VuePrincipale vuePrincipale, ControleurPortefeuille controleurPortefeuille,
+            ControleurTransaction controleurTransaction, VueTransaction vueTransaction,
+            ControleurEpargne controleurEpargne, VueEpargne vueEpargne, ControleurCategorie controleurCategorie,
+            VueCategorie vueCategorie, ServiceCategorie serviceCategorie, ControleurStatistique controleurStatistique) {
         boolean continuer = true;
 
         while (continuer) {
@@ -72,35 +81,9 @@ public class Main {
                     case 1 -> controleurPortefeuille.afficherSolde();
                     case 2 -> controleurTransaction.ajouterDepense();
                     case 3 -> controleurTransaction.ajouterRevenu();
-                    case 4 -> {
-                        switch (vueTransaction.demanderChoixMenuHistorique()) {
-                            case 1 -> controleurTransaction.afficherHistoriqueComplet();
-                            case 2 -> controleurTransaction.afficherHistoriqueParDate();
-                            case 3 -> controleurTransaction.afficherHistoriqueParCategorie();
-                            case 4 -> controleurTransaction.afficherHistoriqueParType();
-                            case 5 -> controleurTransaction.modifierTransaction();
-                            case 6 -> controleurTransaction.supprimerTransaction();
-                            default -> { }
-                        }
-                    }
-                    case 5 -> {
-                        switch (vueEpargne.demanderChoixMenu()) {
-                            case 1 -> controleurEpargne.creerObjectif();
-                            case 2 -> controleurEpargne.contribuerObjectif();
-                            case 3 -> controleurEpargne.retirerObjectif();
-                            case 4 -> controleurEpargne.afficherObjectifs();
-                            case 5 -> controleurEpargne.supprimerObjectif();
-                            default -> { }
-                        }
-                    }
-                    case 6 -> {
-                        vueCategorie.afficherCategoriesActives(serviceCategorie.getCategoriesActives());
-                        switch (vueCategorie.demanderChoixMenu()) {
-                            case 1 -> controleurCategorie.activerCategorie();
-                            case 2 -> controleurCategorie.desactiverCategorie();
-                            default -> { }
-                        }
-                    }
+                    case 4 -> traiterMenuHistorique(vueTransaction, controleurTransaction);
+                    case 5 -> traiterMenuEpargne(vueEpargne, controleurEpargne);
+                    case 6 -> traiterMenuCategorie(vueCategorie, controleurCategorie, serviceCategorie);
                     case 7 -> controleurStatistique.afficherStatistiques();
                     case 8 -> continuer = false;
                     default -> vuePrincipale.afficherChoixInvalide();
@@ -111,5 +94,38 @@ public class Main {
         }
 
         vuePrincipale.afficherAuRevoir();
+    }
+
+    private static void traiterMenuHistorique(VueTransaction vueTransaction, ControleurTransaction controleurTransaction) {
+        switch (vueTransaction.demanderChoixMenuHistorique()) {
+            case 1 -> controleurTransaction.afficherHistoriqueComplet();
+            case 2 -> controleurTransaction.afficherHistoriqueParDate();
+            case 3 -> controleurTransaction.afficherHistoriqueParCategorie();
+            case 4 -> controleurTransaction.afficherHistoriqueParType();
+            case 5 -> controleurTransaction.modifierTransaction();
+            case 6 -> controleurTransaction.supprimerTransaction();
+            default -> { }
+        }
+    }
+
+    private static void traiterMenuEpargne(VueEpargne vueEpargne, ControleurEpargne controleurEpargne) {
+        switch (vueEpargne.demanderChoixMenu()) {
+            case 1 -> controleurEpargne.creerObjectif();
+            case 2 -> controleurEpargne.contribuerObjectif();
+            case 3 -> controleurEpargne.retirerObjectif();
+            case 4 -> controleurEpargne.afficherObjectifs();
+            case 5 -> controleurEpargne.supprimerObjectif();
+            default -> { }
+        }
+    }
+
+    private static void traiterMenuCategorie(VueCategorie vueCategorie, ControleurCategorie controleurCategorie,
+            ServiceCategorie serviceCategorie) {
+        vueCategorie.afficherCategoriesActives(serviceCategorie.getCategoriesActives());
+        switch (vueCategorie.demanderChoixMenu()) {
+            case 1 -> controleurCategorie.activerCategorie();
+            case 2 -> controleurCategorie.desactiverCategorie();
+            default -> { }
+        }
     }
 }
