@@ -1,6 +1,7 @@
 package application.service.implementation;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,8 +39,16 @@ public class ServiceEpargne implements IServiceEpargne {
         return CalculEpargne.calculerMontantActuel(objectif);
     }
 
+    // Garde-fou : montantCible est déjà strictement positif à la création (service et contrainte
+    // SQL), donc ce cas ne devrait jamais se produire ; une exception explicite reste préférable
+    // à une division par zéro silencieuse.
     private double getPourcentageAtteint(Epargne objectif) {
-        return (getMontantActuel(objectif).doubleValue() / objectif.getMontantCible().doubleValue()) * 100;
+        BigDecimal montantCible = objectif.getMontantCible();
+        if (montantCible.compareTo(BigDecimal.ZERO) == 0) {
+            throw new IllegalStateException("Le montant cible de l'objectif ne peut pas être zéro.");
+        }
+        BigDecimal ratio = getMontantActuel(objectif).divide(montantCible, 4, RoundingMode.HALF_UP);
+        return ratio.multiply(BigDecimal.valueOf(100)).doubleValue();
     }
 
     public boolean depasseraCible(int idObjectif, BigDecimal montant) {

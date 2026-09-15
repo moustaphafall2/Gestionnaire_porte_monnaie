@@ -3894,3 +3894,55 @@ corrigé par les mêmes `validerPeriode()`.
 Tester à la main : montant négatif ou nul, date future, pour une dépense/un revenu/une
 contribution/un retrait ; date laissée vide à la création (doit donner aujourd'hui) ; date laissée
 vide pour le filtre d'historique et pour les statistiques (doit afficher l'erreur, pas planter).
+
+## 2026-09-15 — Revirement : `getPourcentageAtteint()` recalculé en `BigDecimal`
+
+### Ce qui a été écrit
+
+`ServiceEpargne.getPourcentageAtteint()` : le calcul passe de `doubleValue() / doubleValue()`
+à `getMontantActuel(objectif).divide(montantCible, 4, RoundingMode.HALF_UP)`, multiplié par 100,
+converti en `double` seulement à la toute fin, pour l'affichage. Garde-fou ajouté avant le calcul :
+`IllegalStateException` si `montantCible` vaut zéro.
+
+### Choix de conception
+
+**Pourquoi revenir sur la décision du 2026-09-11**, qui gardait `pourcentageAtteint` en `double`
+avec ce raisonnement. Une relecture ciblée sur la migration `BigDecimal` a fait ressortir un
+défaut que ce raisonnement n'avait pas anticipé : `doubleValue() / doubleValue()` ne lève jamais
+d'exception sur une division par zéro, elle produit silencieusement `NaN` ou `Infinity`, qui
+partirait à l'affichage sans qu'on s'en aperçoive. `BigDecimal.divide()` lève une
+`ArithmeticException` dans ce cas, plus honnête — d'où l'intérêt d'un garde-fou explicite qui la
+transforme en message clair avant qu'elle ne se produise. Deuxième argument, plus formel : la
+migration a justement pour but de retirer les `double` des calculs dérivés de montants ; même
+pour un simple ratio d'affichage, deux `.doubleValue()` sur des `BigDecimal` de montants restent
+plus difficiles à justifier à l'oral qu'une ligne `divide()` explicite.
+
+**Ce qui ne change pas.** `ObjectifDTO.pourcentageAtteint` reste `double`, et le raisonnement du
+2026-09-11 reste valable pour ce point précis : c'est un ratio d'affichage, jamais stocké ni
+comparé à un seuil métier, donc son imprécision éventuelle après conversion finale en `double`
+n'a aucune conséquence. Seule la façon de l'obtenir a changé, pas ce qui est transporté jusqu'à
+la vue.
+
+**Pourquoi un garde-fou sur un cas déjà inatteignable.** `montantCible` est déjà validé
+strictement positif à la création (`ServiceEpargne.validerMontantCible`) et protégé par la
+contrainte SQL `CHECK (montant_cible > 0)` — ce garde-fou ne devrait donc jamais se déclencher.
+Il suit le même principe que `validerId()` dans `ServiceTransaction` après un retour de
+repository : une défense en profondeur plutôt qu'une confiance aveugle dans les couches en
+amont.
+
+### Points à savoir défendre
+
+- **Pourquoi être revenu sur une décision déjà documentée comme volontaire ?** Le journal ne
+  réécrit jamais une entrée précédente : cette entrée s'ajoute à celle du 2026-09-11 pour
+  expliquer le changement d'avis, sans effacer le raisonnement initial — qui restait correct sur
+  le point qu'il traitait (le type du DTO), juste incomplet sur le risque de division par zéro.
+- **Pourquoi ne pas avoir vérifié que `ControleurEpargne` rattrape bien cette nouvelle
+  exception partout ?** Parce que le cas est structurellement inatteignable (deux verrous déjà en
+  place en amont) : élargir le changement à `ControleurEpargne` pour un cas qui ne peut pas se
+  produire aurait dépassé ce qui était demandé.
+
+### Reste à faire
+
+Tester à la main un objectif avec un pourcentage non entier (ex. 1/3 du montant cible atteint)
+pour vérifier que l'arrondi à 4 décimales avant multiplication par 100 donne un résultat cohérent
+à l'affichage.
