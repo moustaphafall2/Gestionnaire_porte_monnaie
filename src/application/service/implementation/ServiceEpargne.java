@@ -116,10 +116,12 @@ public class ServiceEpargne implements IServiceEpargne {
         }
     }
 
+    // Une date absente vaut aujourd'hui : la vue ne connaît pas cette valeur par défaut.
+    private LocalDate normaliserDate(LocalDate date) {
+        return date == null ? LocalDate.now() : date;
+    }
+
     private void validerDateMouvement(LocalDate date) {
-        if (date == null) {
-            throw new IllegalArgumentException("La date est obligatoire.");
-        }
         if (date.isAfter(LocalDate.now())) {
             throw new IllegalArgumentException("La date ne peut pas être dans le futur.");
         }
@@ -130,7 +132,8 @@ public class ServiceEpargne implements IServiceEpargne {
     public void contribuerObjectif(int idObjectif, BigDecimal montant, LocalDate date) {
         validerMontantMouvement(montant);
         validerSensMouvement(SensMouvement.CONTRIBUTION);
-        validerDateMouvement(date);
+        LocalDate dateNormalisee = normaliserDate(date);
+        validerDateMouvement(dateNormalisee);
 
         BigDecimal soldeDisponible = serviceSolde.getSoldeDisponible();
         if (montant.compareTo(soldeDisponible) > 0) {
@@ -139,23 +142,24 @@ public class ServiceEpargne implements IServiceEpargne {
         }
 
         Epargne objectif = trouverObjectif(idObjectif);
-        epargneRepository.ajouterMouvement(idObjectif, montant, SensMouvement.CONTRIBUTION, date);
-        objectif.ajouterMouvement(new MouvementEpargne(montant, SensMouvement.CONTRIBUTION, date));
+        epargneRepository.ajouterMouvement(idObjectif, montant, SensMouvement.CONTRIBUTION, dateNormalisee);
+        objectif.ajouterMouvement(new MouvementEpargne(montant, SensMouvement.CONTRIBUTION, dateNormalisee));
     }
 
     // Refusé si le montant dépasse ce qui est réellement épargné.
     public void retirerObjectif(int idObjectif, BigDecimal montant, LocalDate date) {
         validerMontantMouvement(montant);
         validerSensMouvement(SensMouvement.RETRAIT);
-        validerDateMouvement(date);
+        LocalDate dateNormalisee = normaliserDate(date);
+        validerDateMouvement(dateNormalisee);
 
         Epargne objectif = trouverObjectif(idObjectif);
         if (montant.compareTo(getMontantActuel(objectif)) > 0) {
             throw new IllegalStateException("Le montant du retrait ne peut pas dépasser le montant actuellement épargné.");
         }
 
-        epargneRepository.ajouterMouvement(idObjectif, montant, SensMouvement.RETRAIT, date);
-        objectif.ajouterMouvement(new MouvementEpargne(montant, SensMouvement.RETRAIT, date));
+        epargneRepository.ajouterMouvement(idObjectif, montant, SensMouvement.RETRAIT, dateNormalisee);
+        objectif.ajouterMouvement(new MouvementEpargne(montant, SensMouvement.RETRAIT, dateNormalisee));
     }
 
     // Suppression autorisée seulement si l'objectif est vide.

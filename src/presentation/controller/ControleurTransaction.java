@@ -52,8 +52,12 @@ public class ControleurTransaction {
             return;
         }
 
-        serviceTransaction.ajouterDepense(montant, categorie, date, description);
-        vueTransaction.afficherDepenseEnregistree();
+        try {
+            serviceTransaction.ajouterDepense(montant, categorie, date, description);
+            vueTransaction.afficherDepenseEnregistree();
+        } catch (IllegalArgumentException | IllegalStateException erreur) {
+            vueTransaction.afficherErreur(erreur.getMessage());
+        }
     }
 
     public void ajouterRevenu() {
@@ -74,8 +78,12 @@ public class ControleurTransaction {
             return;
         }
 
-        serviceTransaction.ajouterRevenu(montant, categorie, date, description);
-        vueTransaction.afficherRevenuEnregistre();
+        try {
+            serviceTransaction.ajouterRevenu(montant, categorie, date, description);
+            vueTransaction.afficherRevenuEnregistre();
+        } catch (IllegalArgumentException | IllegalStateException erreur) {
+            vueTransaction.afficherErreur(erreur.getMessage());
+        }
     }
 
     public void afficherHistoriqueComplet() {
@@ -85,7 +93,12 @@ public class ControleurTransaction {
     public void afficherHistoriqueParDate() {
         LocalDate debut = vueTransaction.demanderDateDebut();
         LocalDate fin = vueTransaction.demanderDateFin();
-        vueTransaction.afficherTransactions(serviceTransaction.filtrerParDate(debut, fin));
+
+        try {
+            vueTransaction.afficherTransactions(serviceTransaction.filtrerParDate(debut, fin));
+        } catch (IllegalArgumentException erreur) {
+            vueTransaction.afficherErreur(erreur.getMessage());
+        }
     }
 
     public void afficherHistoriqueParCategorie() {

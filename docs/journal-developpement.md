@@ -3755,3 +3755,142 @@ Aucun. Compilation propre du projet entier après la migration des cinq couches.
 Tester à la main : une dépense et une contribution avec des centimes, un retrait qui vide
 exactement un objectif (pour confirmer que `estVide()` fonctionne sans l'ancien epsilon), et une
 saisie de montant invalide ou à plus de deux décimales ("abc", "-5", "12,999").
+
+## 2026-09-15 — Lisibilité de `Main` : séparer le câblage et la navigation
+
+### Ce qui a été écrit
+
+`Main.java` : `main()` ne fait plus que charger le portefeuille et construire
+repositories/services/vues/contrôleurs, puis appelle une seule méthode pour démarrer le menu.
+Quatre méthodes privées statiques ajoutées :
+
+- `lancerBoucleMenu(...)` : la boucle `while` et le `switch` principal (ce qui était directement
+  dans `main()` avant).
+- `traiterMenuHistorique(...)`, `traiterMenuEpargne(...)`, `traiterMenuCategorie(...)` : chacune
+  gère le sous-menu imbriqué correspondant (historique des transactions, objectifs d'épargne,
+  catégories).
+
+### Choix de conception
+
+**Pourquoi pas un `ControleurPrincipal`, comme demandé initialement.** La maîtresse de stage a
+suggéré de déplacer la navigation dans un contrôleur dédié pour "mieux respecter MVC". Mais un tel
+contrôleur devrait appeler les cinq autres contrôleurs pour aiguiller chaque choix — ce qui
+viole directement la règle "aucun contrôleur n'en appelle un autre", ajoutée justement pour
+éviter qu'un objet central redevienne le point de passage obligé de tout le projet (le même
+risque qui a fait exclure `getPortefeuille()` de `ServicePortefeuille`).
+
+**Pourquoi ce n'est pas une violation de MVC.** Le principe MVC interdit la communication directe
+**vue ↔ modèle**, pas qu'une vue déclenche un contrôleur — c'est même le flux normal (un clic de
+bouton, une requête HTTP vers un endpoint, font exactement ça). Ce que `Main` fait n'est donc pas
+une vue qui appelle des contrôleurs de façon illégitime, mais l'équivalent fait main d'un
+**routeur** : la brique qui, dans une appli avec framework (web, GUI), traduit un signal brut
+(une URL, un clic) vers l'action à déclencher. Une console n'a pas de framework pour ça — il faut
+bien que ce rôle existe quelque part, et aucune des trois couches (vue, contrôleur, service) ne
+peut l'assumer sans casser une règle déjà posée : la vue violerait "elle ne déclenche aucun
+traitement", un contrôleur violerait "aucun contrôleur n'en appelle un autre".
+
+**Pourquoi des méthodes privées dans `Main` plutôt qu'une nouvelle classe.** Ça répond
+littéralement à la remarque ("trop de logique de navigation dans `Main`") sans multiplier les
+classes pour autant — priorité 7 de l'architecture.
+
+### Points à savoir défendre
+
+- **Pourquoi le contrôleur principal proposé n'a pas été créé ?** Parce qu'il faudrait qu'il
+  appelle les cinq autres contrôleurs, ce que la règle "aucun contrôleur n'en appelle un autre"
+  interdit explicitement — et parce que ce n'est de toute façon pas ce que ferait un vrai
+  frontend : chaque écran y appelle directement son propre contrôleur, sans intermédiaire commun.
+- **Pourquoi la boucle du menu reste dans `Main` et pas dans une couche du domaine/application ?**
+  Le test de l'architecture : si la console est remplacée par une interface graphique, `Main`
+  disparaît ou change complètement, alors que les contrôleurs et services, eux, ne bougent pas.
+  C'est le signe que cette boucle est bien à sa place — elle n'a de sens que pour une console.
+
+### Reste à faire
+
+Rien : la boucle et le câblage restent fonctionnellement identiques à avant, seule leur
+organisation a changé. Comportement vérifié par compilation et par une relecture manuelle du
+`switch`.
+
+## 2026-09-15 — Séparer saisie (vue) et règles métier (service) pour le montant et la date
+
+### Ce qui a été écrit
+
+- `VueConsole.lireMontant()` : ne vérifie plus que `montant > 0` — ne fait plus que parser le
+  texte en `BigDecimal`.
+- `VueConsole.lireDate()` : ne vérifie plus que la date n'est pas dans le futur, et renvoie
+  désormais `null` si la saisie est vide, au lieu de `LocalDate.now()`.
+- `ServiceTransaction` et `ServiceEpargne` : ajout d'une méthode privée `normaliserDate(LocalDate)`
+  qui substitue `LocalDate.now()` à une date `null`, appelée avant `validerDate()`/
+  `validerDateMouvement()` dans `ajouterDepense()`, `ajouterRevenu()`, `modifierTransaction()`,
+  `contribuerObjectif()`, `retirerObjectif()`.
+- `ServiceStatistique.validerPeriode()` et une nouvelle `ServiceTransaction.validerPeriode()`
+  refusent une date de début ou de fin `null` ("Les dates de début et de fin sont obligatoires.").
+- `ControleurTransaction` : `ajouterDepense()` et `ajouterRevenu()` attrapent désormais
+  `IllegalArgumentException`/`IllegalStateException`, comme `modifierTransaction()`/
+  `supprimerTransaction()` le faisaient déjà ; `afficherHistoriqueParDate()` attrape désormais
+  `IllegalArgumentException`.
+
+### Choix de conception
+
+**Pourquoi retirer ces deux contrôles de la vue.** Ils reproduisaient mot pour mot deux lignes de
+la table "Règles de gestion" (montant strictement positif, date jamais postérieure au jour) que
+l'architecture attribue à l'entité/au service. La règle vivait donc à deux endroits — la vue
+*et* le service — ce qui contredit "la vue ne décide d'aucune règle métier" même si la vue
+n'importe aucun service : le contenu de la règle était dupliqué, pas seulement son exécution.
+
+**Pourquoi la vue continue de refuser un texte imparsable ("abc", une date au mauvais format).**
+Ce n'est pas le même niveau de contrôle : pouvoir *construire* un `BigDecimal` ou une `LocalDate`
+à partir du texte saisi est un problème de format, propre à la saisie. Ce que cette valeur *doit*
+valoir pour être acceptée par le métier (positive, pas dans le futur) est une question différente,
+qui reste du ressort du service.
+
+**Pourquoi la valeur par défaut "vide = aujourd'hui" est passée côté service.** Décider ce que
+signifie une donnée absente est un choix métier, pas un format de saisie — le même raisonnement
+qui justifiait déjà `normaliserDescription()` (`null` devient `""`) côté service. `lireDate()` ne
+fait plus que traduire "texte vide" en "aucune valeur" (`null`) ; c'est `normaliserDate()`, dans
+le service, qui décide que "aucune valeur" signifie "aujourd'hui".
+
+**Pourquoi la ressaisie immédiate ("tapez à nouveau seulement le montant") n'a pas été gardée.**
+Trois options ont été examinées et rejetées : la vue boucle en connaissant la règle (la
+duplication qu'on retire justement) ; la vue boucle en interrogeant le service (interdit, vue et
+service ne communiquent jamais directement) ; le contrôleur boucle (interdit par la règle "aucune
+boucle `for`/`while` dans un contrôleur", ajoutée pour la lisibilité). Aucune des trois ne
+respecte l'ensemble des règles déjà posées — retaper la saisie entière après une erreur est donc
+le compromis assumé de cette séparation stricte, pas un oubli.
+
+### Points à savoir défendre
+
+- **Pourquoi le service ne boucle pas lui-même pour redemander une valeur invalide ?** Un service
+  n'a ni `Scanner` ni référence vers une vue — les deux sont interdits par l'architecture. Et une
+  boucle de re-saisie n'aurait de sens que pour une console interactive : si ce service était un
+  jour appelé par un import de fichier ou une API web, "redemander" ne voudrait plus rien dire.
+- **Pourquoi le contrôleur ne boucle pas non plus, alors qu'il connaît la vue et le service ?**
+  Ça reproduirait, sous une autre forme, la complexité que la règle "aucune boucle dans un
+  contrôleur" a été ajoutée pour éliminer : savoir quel champ redemander, combien de fois, et
+  gérer l'abandon en cours de route transformerait une méthode d'enchaînement simple en un petit
+  flux de contrôle.
+- **Pourquoi une date vide devient "aujourd'hui" pour une transaction, mais une erreur pour un
+  filtre par période ?** Ce sont deux règles différentes : l'absence de date a un sens métier par
+  défaut à la création d'un mouvement (aujourd'hui), alors qu'un filtre par période a besoin de
+  ses deux bornes pour produire un résultat — les rendre obligatoires est la seule option
+  cohérente.
+
+### Pièges rencontrés
+
+Une première version de cette correction faisait boucler `VueConsole` (une méthode
+`lireDateObligatoire()`) jusqu'à obtenir une date non vide pour le filtre d'historique et les
+statistiques. Repérée en relecture : rendre un champ obligatoire est déjà traité comme une règle
+métier ailleurs dans le projet (`ServiceEpargne.validerNomObjectif()`), donc cette boucle était
+une règle métier déguisée en confort de saisie. Retirée, remplacée par `ServiceTransaction
+.validerPeriode()` et `ServiceStatistique.validerPeriode()`, avec un `try/catch` ajouté dans les
+contrôleurs concernés.
+
+Ce même changement (date vide → `null` plutôt que `LocalDate.now()`) aurait aussi provoqué une
+`NullPointerException` non rattrapée dans `ServiceTransaction.filtrerParDate()` et
+`ServiceStatistique.getStatistiques()`, qui comparaient déjà les bornes sans prévoir `null` —
+corrigé par les mêmes `validerPeriode()`.
+
+### Reste à faire
+
+Tester à la main : montant négatif ou nul, date future, pour une dépense/un revenu/une
+contribution/un retrait ; date laissée vide à la création (doit donner aujourd'hui) ; date laissée
+vide pour le filtre d'historique et pour les statistiques (doit afficher l'erreur, pas planter).
