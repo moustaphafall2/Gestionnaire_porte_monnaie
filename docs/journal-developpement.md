@@ -3946,3 +3946,61 @@ amont.
 Tester à la main un objectif avec un pourcentage non entier (ex. 1/3 du montant cible atteint)
 pour vérifier que l'arrondi à 4 décimales avant multiplication par 100 donne un résultat cohérent
 à l'affichage.
+
+## 2026-09-15 — Revirement : la vue reprend les contrôles de montant et de date
+
+### Ce qui a été écrit
+
+- `VueConsole.lireMontant()`/`lireDate()` : retour des deux contrôles métier retirés dans
+  l'entrée précédente (montant strictement positif, date pas dans le futur), et la saisie vide
+  redonne à nouveau `LocalDate.now()` au lieu de `null`.
+- `ServiceTransaction` et `ServiceEpargne` : suppression de `normaliserDate()`, retour à
+  `validerDate()`/`validerDateMouvement()` dans leur forme d'origine (avec le contrôle `null`).
+- `ServiceTransaction.filtrerParDate()` et `ServiceStatistique.validerPeriode()` : retrait du
+  contrôle "dates obligatoires", redevenu inutile puisque la vue ne renvoie plus jamais `null`.
+- `ControleurTransaction.afficherHistoriqueParDate()` : retrait du `try/catch` qui n'avait plus
+  rien à attraper.
+
+Gardés intacts, sans rapport avec ce sujet : le refactor de `Main` et le calcul de
+`getPourcentageAtteint()` en `BigDecimal`.
+
+### Choix de conception
+
+**Pourquoi revenir sur la séparation stricte vue/service pour ces deux règles.** Décision prise
+après discussion directe avec la maîtresse de stage, qui a donné son accord pour que la vue porte
+elle-même ces deux contrôles. Ce n'est pas une réaction au bug rencontré en testant : la
+discussion a eu lieu séparément, le bug a seulement été découvert au moment de vérifier le
+comportement, pas provoqué la décision.
+
+**Le bug rencontré en testant, pour mémoire.** Une `NullPointerException` dans
+`VueTransaction.afficherRecapitulatif()` en laissant la date vide à l'ajout d'une dépense :
+`ControleurTransaction.ajouterDepense()` affichait le récapitulatif avec la date **brute**
+(potentiellement `null` depuis la vue) *avant* d'appeler le service, qui est le seul endroit qui
+aurait su la remplacer par la date du jour. Techniquement corrigeable sans revenir sur la
+séparation (normaliser la date plus tôt, avant le récapitulatif), mais ce cas illustre bien le
+risque structurel de cette séparation : une donnée encore "brute", pas encore passée par le
+service, peut être utilisée ailleurs dans le contrôleur entre la saisie et l'appel métier.
+
+### Points à savoir défendre
+
+- **Pourquoi la vue reprend-elle des règles qu'on avait justement sorties d'elle quelques
+  échanges plus tôt ?** Parce que c'est un arbitrage qui appartient à la maîtresse de stage, pas
+  un choix technique unilatéral : elle a tranché en faveur de la simplicité (contrôle dans la
+  vue) plutôt que de la séparation stricte, en connaissance des deux options et de leurs
+  contreparties.
+- **Le bug rencontré ne prouve-t-il pas que la séparation stricte était juste incomplète, pas
+  mauvaise ?** Si — il aurait suffi de normaliser la date avant l'affichage du récapitulatif, pas
+  seulement avant l'appel au service. Mais il montre concrètement le genre de risque que cette
+  séparation introduit (une valeur à moitié validée qui circule entre la vue et le service) ;
+  garder les deux contrôles dans la vue l'évite structurellement, au prix de la duplication
+  qu'on avait cherché à retirer.
+
+### Pièges rencontrés
+
+`NullPointerException` sur `VueTransaction.afficherRecapitulatif()` (date vide), décrite
+ci-dessus — révélatrice du risque de la séparation stricte, pas la cause du revirement.
+
+### Reste à faire
+
+Rien : testé à la main après correction (montant négatif rejeté avec reboucle, date vide
+acceptée et remplacée par aujourd'hui, dépense enregistrée sans erreur).

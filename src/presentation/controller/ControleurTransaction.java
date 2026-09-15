@@ -93,12 +93,7 @@ public class ControleurTransaction {
     public void afficherHistoriqueParDate() {
         LocalDate debut = vueTransaction.demanderDateDebut();
         LocalDate fin = vueTransaction.demanderDateFin();
-
-        try {
-            vueTransaction.afficherTransactions(serviceTransaction.filtrerParDate(debut, fin));
-        } catch (IllegalArgumentException erreur) {
-            vueTransaction.afficherErreur(erreur.getMessage());
-        }
+        vueTransaction.afficherTransactions(serviceTransaction.filtrerParDate(debut, fin));
     }
 
     public void afficherHistoriqueParCategorie() {

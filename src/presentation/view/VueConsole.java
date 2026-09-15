@@ -48,7 +48,12 @@ public class VueConsole {
         while (true) {
             String saisie = lireLigne(message).replace(",", ".");
             try {
-                return new BigDecimal(saisie).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal montant = new BigDecimal(saisie).setScale(2, RoundingMode.HALF_UP);
+                if (montant.compareTo(BigDecimal.ZERO) <= 0) {
+                    afficherMessage("Le montant doit être strictement positif.");
+                    continue;
+                }
+                return montant;
             } catch (NumberFormatException erreur) {
                 afficherMessage("Montant invalide, veuillez saisir un nombre.");
             }
@@ -59,10 +64,15 @@ public class VueConsole {
         while (true) {
             String saisie = lireLigne(message);
             if (saisie.isEmpty()) {
-                return null;
+                return LocalDate.now();
             }
             try {
-                return LocalDate.parse(saisie, FORMAT_DATE);
+                LocalDate date = LocalDate.parse(saisie, FORMAT_DATE);
+                if (date.isAfter(LocalDate.now())) {
+                    afficherMessage("La date ne peut pas être dans le futur.");
+                    continue;
+                }
+                return date;
             } catch (DateTimeParseException erreur) {
                 afficherMessage("Date invalide, format attendu JJ/MM/AAAA.");
             }

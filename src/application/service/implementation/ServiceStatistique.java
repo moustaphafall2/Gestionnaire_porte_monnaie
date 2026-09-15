@@ -25,9 +25,6 @@ public class ServiceStatistique implements IServiceStatistique {
     }
 
     private void validerPeriode(LocalDate debut, LocalDate fin) {
-        if (debut == null || fin == null) {
-            throw new IllegalArgumentException("Les dates de début et de fin sont obligatoires.");
-        }
         if (debut.isAfter(fin)) {
             throw new IllegalArgumentException("La date de début ne peut pas être postérieure à la date de fin.");
         }

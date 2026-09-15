@@ -67,12 +67,10 @@ public class ServiceTransaction implements IServiceTransaction {
         }
     }
 
-    // Une date absente vaut aujourd'hui : la vue ne connaît pas cette valeur par défaut.
-    private LocalDate normaliserDate(LocalDate date) {
-        return date == null ? LocalDate.now() : date;
-    }
-
     private void validerDate(LocalDate date) {
+        if (date == null) {
+            throw new IllegalArgumentException("La date est obligatoire.");
+        }
         if (date.isAfter(LocalDate.now())) {
             throw new IllegalArgumentException("La date ne peut pas être dans le futur.");
         }
@@ -87,13 +85,12 @@ public class ServiceTransaction implements IServiceTransaction {
         validerMontant(montant);
         validerType(TypeTransaction.DEPENSE);
         validerCategorieCoherente(categorie, TypeTransaction.DEPENSE);
-        LocalDate dateNormalisee = normaliserDate(date);
-        validerDate(dateNormalisee);
+        validerDate(date);
 
         String descriptionNormalisee = normaliserDescription(description);
-        int id = transactionRepository.ajouter(montant, TypeTransaction.DEPENSE, categorie, dateNormalisee, descriptionNormalisee);
+        int id = transactionRepository.ajouter(montant, TypeTransaction.DEPENSE, categorie, date, descriptionNormalisee);
         validerId(id);
-        Transaction depense = new Transaction(id, montant, TypeTransaction.DEPENSE, categorie, dateNormalisee, descriptionNormalisee);
+        Transaction depense = new Transaction(id, montant, TypeTransaction.DEPENSE, categorie, date, descriptionNormalisee);
         servicePortefeuille.getDonnees().ajouterTransaction(depense);
     }
 
@@ -102,13 +99,12 @@ public class ServiceTransaction implements IServiceTransaction {
         validerMontant(montant);
         validerType(TypeTransaction.REVENU);
         validerCategorieCoherente(categorie, TypeTransaction.REVENU);
-        LocalDate dateNormalisee = normaliserDate(date);
-        validerDate(dateNormalisee);
+        validerDate(date);
 
         String descriptionNormalisee = normaliserDescription(description);
-        int id = transactionRepository.ajouter(montant, TypeTransaction.REVENU, categorie, dateNormalisee, descriptionNormalisee);
+        int id = transactionRepository.ajouter(montant, TypeTransaction.REVENU, categorie, date, descriptionNormalisee);
         validerId(id);
-        Transaction revenu = new Transaction(id, montant, TypeTransaction.REVENU, categorie, dateNormalisee, descriptionNormalisee);
+        Transaction revenu = new Transaction(id, montant, TypeTransaction.REVENU, categorie, date, descriptionNormalisee);
         servicePortefeuille.getDonnees().ajouterTransaction(revenu);
     }
 
@@ -117,15 +113,14 @@ public class ServiceTransaction implements IServiceTransaction {
         Transaction transaction = trouverTransaction(id);
         validerMontant(nouveauMontant);
         validerCategorieCoherente(nouvelleCategorie, transaction.getType());
-        LocalDate dateNormalisee = normaliserDate(nouvelleDate);
-        validerDate(dateNormalisee);
+        validerDate(nouvelleDate);
 
         String descriptionNormalisee = normaliserDescription(nouvelleDescription);
-        transactionRepository.modifier(id, nouveauMontant, nouvelleCategorie, dateNormalisee, descriptionNormalisee);
+        transactionRepository.modifier(id, nouveauMontant, nouvelleCategorie, nouvelleDate, descriptionNormalisee);
 
         transaction.setMontant(nouveauMontant);
         transaction.setCategorie(nouvelleCategorie);
-        transaction.setDate(dateNormalisee);
+        transaction.setDate(nouvelleDate);
         transaction.setDescription(descriptionNormalisee);
     }
 
@@ -145,14 +140,7 @@ public class ServiceTransaction implements IServiceTransaction {
         return TransactionMapper.versListeDTO(historique);
     }
 
-    private void validerPeriode(LocalDate debut, LocalDate fin) {
-        if (debut == null || fin == null) {
-            throw new IllegalArgumentException("Les dates de début et de fin sont obligatoires.");
-        }
-    }
-
     public List<TransactionDTO> filtrerParDate(LocalDate debut, LocalDate fin) {
-        validerPeriode(debut, fin);
         List<Transaction> resultat = new ArrayList<>();
         for (Transaction transaction : servicePortefeuille.getDonnees().getTransactions()) {
             LocalDate date = transaction.getDate();
